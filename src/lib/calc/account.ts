@@ -6,7 +6,9 @@
  * Tracks cost basis for taxable and contribution basis for Roth accounts.
  */
 
-import type { AccountInputs, InvestmentAccountType } from '@/lib/schemas/inputs/account-form-schema';
+import type { AccountInputs } from '@/lib/schemas/inputs/account-form-schema';
+
+type InvestmentAccountType = string;
 
 import {
   type AssetReturnRates,
@@ -223,8 +225,9 @@ export class SavingsAccount extends Account {
 /** Base class for stock/bond investment accounts with asset allocation tracking */
 export abstract class InvestmentAccount extends Account {
   private currPercentBonds: number;
+  private readonly hasRmd: boolean;
 
-  constructor(data: AccountInputs & { type: InvestmentAccountType }) {
+  constructor(data: AccountInputs & { type: InvestmentAccountType }, hasRmd = false) {
     const cumulativeReturnAmounts: AssetReturnAmounts = { cash: 0, bonds: 0, stocks: 0 };
     const cumulativeContributions: AssetFlows = { cash: 0, bonds: 0, stocks: 0 };
     const cumulativeWithdrawals: AssetFlows = { cash: 0, bonds: 0, stocks: 0 };
@@ -244,11 +247,12 @@ export abstract class InvestmentAccount extends Account {
       0,
       cumulativeYieldAmounts
     );
-    this.currPercentBonds = data.percentBonds / 100;
+    this.hasRmd = hasRmd;
+    this.currPercentBonds = (data.percentBonds ?? 0) / 100;
   }
 
   getHasRMDs(): boolean {
-    return this.type === 'ira' || this.type === '401k' || this.type === '403b';
+    return this.hasRmd;
   }
 
   getAccountData(): AccountData {
@@ -398,9 +402,9 @@ export class TaxableBrokerageAccount extends InvestmentAccount {
 
   private costBasis: number;
 
-  constructor(data: AccountInputs & { type: 'taxableBrokerage' }) {
-    super(data);
-    this.costBasis = data.costBasis!;
+  constructor(data: AccountInputs & { type: string; percentBonds?: number }) {
+    super(data as AccountInputs & { type: InvestmentAccountType });
+    this.costBasis = data.costBasis ?? 0;
   }
 
   getCostBasis(): number {
@@ -447,12 +451,12 @@ export class TaxableBrokerageAccount extends InvestmentAccount {
   }
 }
 
-/** Tax-deferred account (401k, 403b, IRA, HSA) — all withdrawals taxed as ordinary income */
+/** Tax-deferred account — all withdrawals taxed as ordinary income */
 export class TaxDeferredAccount extends InvestmentAccount {
   readonly taxCategory: TaxCategory = 'taxDeferred';
 
-  constructor(data: AccountInputs & { type: 'ira' | '401k' | '403b' | 'hsa' }) {
-    super(data);
+  constructor(data: AccountInputs & { type: string; percentBonds?: number }, hasRmd = false) {
+    super(data as AccountInputs & { type: InvestmentAccountType }, hasRmd);
   }
 
   applyContribution(amount: number, type: ContributionType, contributionAllocation: AssetAllocation): AssetFlows {
@@ -480,9 +484,9 @@ export class TaxFreeAccount extends InvestmentAccount {
 
   private contributionBasis: number;
 
-  constructor(data: AccountInputs & { type: 'rothIra' | 'roth401k' | 'roth403b' }) {
-    super(data);
-    this.contributionBasis = data.contributionBasis!;
+  constructor(data: AccountInputs & { type: string; percentBonds?: number }, hasRmd = false) {
+    super(data as AccountInputs & { type: InvestmentAccountType }, hasRmd);
+    this.contributionBasis = data.contributionBasis ?? 0;
   }
 
   getContributionBasis(): number {

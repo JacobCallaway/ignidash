@@ -2,12 +2,15 @@
  * Income processing for the simulation engine
  *
  * Handles multiple income sources with varying frequencies, time frames,
- * growth rates, and tax treatments (wage, exempt, Social Security).
- * Processes FICA tax (7.65%) and withholding at the income level.
+ * growth rates, and tax treatments. All country-specific rules come from
+ * CountryConfig (payroll tax rates, income type flags).
  */
 
 import type { IncomeInputs, IncomeType } from '@/lib/schemas/inputs/income-form-schema';
 import type { TimePoint } from '@/lib/schemas/inputs/income-expenses-shared-schemas';
+import type { CountryConfig, IncomeTypeConfig } from '@/lib/country/types';
+import { computePayrollTax } from '@/lib/country';
+import { usConfig } from '@/lib/country/configs/us';
 
 import type { SimulationState } from './simulation-engine';
 
@@ -112,8 +115,8 @@ export interface IncomesData {
 export class Incomes {
   private readonly incomes: Income[];
 
-  constructor(data: IncomeInputs[]) {
-    this.incomes = data.filter((income) => !income.disabled).map((income) => new Income(income));
+  constructor(data: IncomeInputs[], countryConfig: CountryConfig = usConfig) {
+    this.incomes = data.filter((income) => !income.disabled).map((income) => new Income(income, countryConfig));
   }
 
   getActiveIncomesByTimeFrame(simulationState: SimulationState): Income[] {
@@ -146,8 +149,10 @@ export class Income {
   private lastYear: number = 0;
   private incomeType: IncomeType;
   private withholdingRate: number;
+  private incomeTypeConfig: IncomeTypeConfig | undefined;
+  private countryConfig: CountryConfig;
 
-  constructor(data: IncomeInputs) {
+  constructor(data: IncomeInputs, countryConfig: CountryConfig = usConfig) {
     this.hasOneTimeIncomeOccurred = false;
     this.id = data.id;
     this.name = data.name;
@@ -159,6 +164,8 @@ export class Income {
     this.frequency = data.frequency;
     this.incomeType = data.taxes.incomeType;
     this.withholdingRate = data.taxes.withholding ?? 0;
+    this.countryConfig = countryConfig;
+    this.incomeTypeConfig = countryConfig.incomeTypes.find((t) => t.id === data.taxes.incomeType);
   }
 
   /**
@@ -211,20 +218,15 @@ export class Income {
     let ficaTax: number = 0;
     let taxFreeIncome: number = 0;
     let socialSecurityIncome: number = 0;
-    switch (this.incomeType) {
-      case 'wage':
-        amountWithheld = income * (this.withholdingRate / 100);
-        ficaTax = income * 0.0765; // FICA: 6.2% Social Security + 1.45% Medicare
-        break;
-      case 'exempt':
-        taxFreeIncome = income;
-        break;
-      case 'socialSecurity':
-        amountWithheld = income * (this.withholdingRate / 100);
-        socialSecurityIncome = income;
-        break;
-      default:
-        break;
+    const typeConfig = this.incomeTypeConfig;
+    if (typeConfig?.isTaxFree) {
+      taxFreeIncome = income;
+    } else {
+      if (typeConfig?.hasWithholding) amountWithheld = income * (this.withholdingRate / 100);
+      if (typeConfig?.hasPayrollTax && this.countryConfig.payrollTax) {
+        ficaTax = computePayrollTax(income, this.countryConfig.payrollTax);
+      }
+      if (typeConfig?.isSocialSecurityLike) socialSecurityIncome = income;
     }
 
     const incomeAfterPayrollDeductions = income - amountWithheld - ficaTax;

@@ -36,13 +36,7 @@ export const incomeValidator = v.object({
     })
   ),
   taxes: v.object({
-    incomeType: v.union(
-      v.literal('wage'),
-      v.literal('exempt'),
-      v.literal('selfEmployment'),
-      v.literal('socialSecurity'),
-      v.literal('pension')
-    ),
+    incomeType: v.string(),
     withholding: v.optional(v.number()),
   }),
   disabled: v.boolean(),

@@ -417,11 +417,7 @@ export class SimulationDataExtractor {
     const taxesData = dp.taxes;
     if (!taxesData) return 0;
 
-    return (
-      taxesData.incomeSources.earlyWithdrawals.rothEarnings +
-      taxesData.incomeSources.earlyWithdrawals['401kAndIra'] +
-      taxesData.incomeSources.earlyWithdrawals.hsa
-    );
+    return Object.values(taxesData.incomeSources.earlyWithdrawals).reduce((sum, v) => sum + v, 0);
   }
 
   /**

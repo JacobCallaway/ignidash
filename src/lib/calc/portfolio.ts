@@ -8,6 +8,9 @@
 
 import type { AccountInputs } from '@/lib/schemas/inputs/account-form-schema';
 import type { GlidePathInputs } from '@/lib/schemas/inputs/glide-path-form-schema';
+import type { CountryConfig } from '@/lib/country/types';
+import { getAccountTypeConfig } from '@/lib/country';
+import { usConfig } from '@/lib/country/configs/us';
 
 import {
   type Account,
@@ -37,14 +40,13 @@ import type { ExpensesData } from './expenses';
 import type { DebtsData } from './debts';
 import type { PhysicalAssetsData } from './physical-assets';
 import type { AccountDataWithReturns } from './returns';
-import { uniformLifetimeMap } from './historical-data/rmd-table';
 
 type FlowsData = { total: AssetFlows; byAccount: Record<string, AssetFlows> };
 
 type WithdrawalModifier = 'contributionsOnly';
 
 interface WithdrawalOrderItem {
-  accountType: AccountInputs['type'];
+  accountTypeId: string;
   modifier?: WithdrawalModifier;
 }
 
@@ -65,6 +67,7 @@ export class PortfolioProcessor {
     private simulationState: SimulationState,
     private simulationContext: SimulationContext,
     private contributionRules: ContributionRules,
+    private countryConfig: CountryConfig = usConfig,
     private glidePath?: GlidePathInputs
   ) {
     this.initialAssetAllocation = this.simulationState.portfolio.getWeightedAssetAllocation();
@@ -373,10 +376,10 @@ export class PortfolioProcessor {
     const withdrawalOrder = this.getWithdrawalOrder();
     let remainingToWithdraw = Math.abs(netCashFlow);
 
-    for (const { accountType, modifier } of withdrawalOrder) {
+    for (const { accountTypeId, modifier } of withdrawalOrder) {
       if (remainingToWithdraw <= 0) break;
 
-      const accountsOfType = this.simulationState.portfolio.getAccounts().filter((account) => account.getAccountType() === accountType);
+      const accountsOfType = this.simulationState.portfolio.getAccounts().filter((account) => account.getAccountType() === accountTypeId);
       if (accountsOfType.length === 0) continue;
 
       for (const account of accountsOfType) {
@@ -449,13 +452,15 @@ export class PortfolioProcessor {
     let realizedGains = 0;
     let earningsWithdrawn = 0;
 
+    const rmdTable = this.countryConfig.rmd?.table ?? {};
     const accountsWithRMDs = this.simulationState.portfolio.getAccounts().filter((account) => account.getHasRMDs());
     for (const account of accountsWithRMDs) {
       if (!(account.getBalance() > 0)) continue;
 
-      // IRS Uniform Lifetime Table (Treas. Reg. §1.401(a)(9)-9)
       const lookupAge = Math.min(Math.floor(age), 120);
-      const rmdAmount = account.getBalance() / uniformLifetimeMap[lookupAge];
+      const factor = rmdTable[lookupAge];
+      if (!factor) continue;
+      const rmdAmount = account.getBalance() / factor;
 
       const withdrawalAllocation = this.getAllocationForWithdrawal(rmdAmount);
       const {
@@ -585,43 +590,15 @@ export class PortfolioProcessor {
     };
   }
 
-  /**
-   * Returns the tax-optimized withdrawal order based on age
-   *
-   * Before 59.5: savings -> taxable -> Roth contributions -> tax-deferred -> Roth earnings -> HSA
-   * After 59.5: savings -> tax-deferred -> taxable -> Roth -> HSA
-   */
+  /** Returns the tax-optimized withdrawal order based on age and country config. */
   private getWithdrawalOrder(): Array<WithdrawalOrderItem> {
     const age = this.simulationState.time.age;
-    const regularQualifiedWithdrawalAge = 59.5;
+    const { penaltyFreeAge, withdrawalOrder } = this.countryConfig;
 
-    if (age < regularQualifiedWithdrawalAge) {
-      return [
-        { accountType: 'savings' },
-        { accountType: 'taxableBrokerage' },
-        { accountType: 'roth401k', modifier: 'contributionsOnly' },
-        { accountType: 'roth403b', modifier: 'contributionsOnly' },
-        { accountType: 'rothIra', modifier: 'contributionsOnly' },
-        { accountType: '401k' },
-        { accountType: '403b' },
-        { accountType: 'ira' },
-        { accountType: 'roth401k' },
-        { accountType: 'roth403b' },
-        { accountType: 'rothIra' },
-        { accountType: 'hsa' },
-      ];
+    if (age < penaltyFreeAge) {
+      return withdrawalOrder.beforePenaltyFreeAge;
     } else {
-      return [
-        { accountType: 'savings' },
-        { accountType: '401k' },
-        { accountType: '403b' },
-        { accountType: 'ira' },
-        { accountType: 'taxableBrokerage' },
-        { accountType: 'roth401k' },
-        { accountType: 'roth403b' },
-        { accountType: 'rothIra' },
-        { accountType: 'hsa' },
-      ];
+      return withdrawalOrder.afterPenaltyFreeAge;
     }
   }
 
@@ -868,22 +845,21 @@ export type PortfolioData = PortfolioSnapshotData & PortfolioFlowData;
 export class Portfolio {
   private accounts: Account[];
 
-  constructor(data: AccountInputs[]) {
+  constructor(data: AccountInputs[], countryConfig: CountryConfig = usConfig) {
     this.accounts = data.map((accountData) => {
-      switch (accountData.type) {
-        case 'savings':
+      const typeConfig = getAccountTypeConfig(countryConfig, accountData.type);
+      const hasRmd = typeConfig?.hasRmd ?? false;
+      switch (typeConfig?.taxCategory ?? 'cashSavings') {
+        case 'cashSavings':
           return new SavingsAccount(accountData);
-        case 'taxableBrokerage':
+        case 'taxable':
           return new TaxableBrokerageAccount(accountData);
-        case 'roth401k':
-        case 'roth403b':
-        case 'rothIra':
-          return new TaxFreeAccount(accountData);
-        case '401k':
-        case '403b':
-        case 'ira':
-        case 'hsa':
-          return new TaxDeferredAccount(accountData);
+        case 'taxFree':
+          return new TaxFreeAccount(accountData, hasRmd);
+        case 'taxDeferred':
+          return new TaxDeferredAccount(accountData, hasRmd);
+        default:
+          return new SavingsAccount(accountData);
       }
     });
   }

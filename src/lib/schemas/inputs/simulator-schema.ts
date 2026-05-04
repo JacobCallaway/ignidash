@@ -22,6 +22,7 @@ import { privacySettingsFormSchema } from './privacy-settings-form-schema';
 import { simulationSettingsSchema } from './simulation-settings-form-schema';
 
 export const simulatorSchema = z.object({
+  country: z.string().default('US'),
   timeline: timelineFormSchema.nullable(),
   incomes: z.record(z.string(), incomeFormSchema),
   accounts: z.record(z.string(), accountFormSchema),

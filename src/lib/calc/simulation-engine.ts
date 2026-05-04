@@ -9,6 +9,7 @@
 
 import type { SimulatorInputs } from '@/lib/schemas/inputs/simulator-schema';
 import { type TimelineInputs, type RetirementStrategyInputs, calculatePreciseAge } from '@/lib/schemas/inputs/timeline-form-schema';
+import { getCountryConfig } from '@/lib/country';
 
 import type { ReturnsProvider } from './returns-providers/returns-provider';
 import { StochasticReturnsProvider } from './returns-providers/stochastic-returns-provider';
@@ -95,15 +96,21 @@ export class FinancialSimulationEngine {
    * @returns Complete simulation result with time-series data and context
    */
   runSimulation(returnsProvider: ReturnsProvider, timeline: TimelineInputs): SimulationResult {
-    // Init context and state
-    const simulationContext: SimulationContext = this.initSimulationContext(timeline);
-    const simulationState: SimulationState = this.initSimulationState(simulationContext);
+    const countryConfig = getCountryConfig(this.inputs.country);
 
-    const incomes = new Incomes(Object.values(this.inputs.incomes));
+    // Init context and state
+    const simulationContext: SimulationContext = this.initSimulationContext(timeline, countryConfig);
+    const simulationState: SimulationState = this.initSimulationState(simulationContext, countryConfig);
+
+    const incomes = new Incomes(Object.values(this.inputs.incomes), countryConfig);
     const expenses = new Expenses(Object.values(this.inputs.expenses));
     const debts = new Debts(Object.values(this.inputs.debts));
     const physicalAssets = new PhysicalAssets(Object.values(this.inputs.physicalAssets));
-    const contributionRules = new ContributionRules(Object.values(this.inputs.contributionRules), this.inputs.baseContributionRule);
+    const contributionRules = new ContributionRules(
+      Object.values(this.inputs.contributionRules),
+      this.inputs.baseContributionRule,
+      countryConfig
+    );
 
     const resultData: Array<SimulationDataPoint> = [this.initSimulationDataPoint(simulationState, debts, physicalAssets)];
 
@@ -113,8 +120,14 @@ export class FinancialSimulationEngine {
     const expensesProcessor = new ExpensesProcessor(simulationState, expenses);
     const debtsProcessor = new DebtsProcessor(simulationState, debts);
     const physicalAssetsProcessor = new PhysicalAssetsProcessor(simulationState, physicalAssets);
-    const portfolioProcessor = new PortfolioProcessor(simulationState, simulationContext, contributionRules, this.inputs.glidePath);
-    const taxProcessor = new TaxProcessor(simulationState, this.inputs.taxSettings.filingStatus);
+    const portfolioProcessor = new PortfolioProcessor(
+      simulationState,
+      simulationContext,
+      contributionRules,
+      countryConfig,
+      this.inputs.glidePath
+    );
+    const taxProcessor = new TaxProcessor(simulationState, this.inputs.taxSettings.filingStatus, countryConfig);
 
     // Init phase identifier
     const phaseIdentifier = new PhaseIdentifier(simulationState, timeline);
@@ -282,7 +295,7 @@ export class FinancialSimulationEngine {
     return { taxesData, portfolioData, discretionaryExpense };
   }
 
-  private initSimulationContext(timeline: TimelineInputs): SimulationContext {
+  private initSimulationContext(timeline: TimelineInputs, countryConfig: ReturnType<typeof getCountryConfig>): SimulationContext {
     const startAge = calculatePreciseAge(timeline.birthMonth, timeline.birthYear);
     const endAge = timeline.lifeExpectancy;
 
@@ -292,19 +305,17 @@ export class FinancialSimulationEngine {
     const endDate = new Date(startDate.getFullYear() + yearsToSimulate, startDate.getMonth(), 1);
 
     const retirementStrategy = timeline.retirementStrategy;
-
-    // SECURE Act 2.0: RMD age is 75 for those born 1960+, otherwise 73
-    const rmdAge = timeline.birthYear >= 1960 ? 75 : 73;
+    const rmdAge = countryConfig.rmd?.getStartAge(timeline.birthYear) ?? Infinity;
 
     return { startAge, endAge, yearsToSimulate, startDate, endDate, retirementStrategy, rmdAge };
   }
 
-  private initSimulationState(simulationContext: SimulationContext): SimulationState {
+  private initSimulationState(simulationContext: SimulationContext, countryConfig: ReturnType<typeof getCountryConfig>): SimulationState {
     const { startDate, startAge: age } = simulationContext;
 
     return {
       time: { date: new Date(startDate), age, year: 0, month: 0 },
-      portfolio: new Portfolio(Object.values(this.inputs.accounts)),
+      portfolio: new Portfolio(Object.values(this.inputs.accounts), countryConfig),
       phase: null,
       annualData: { expenses: [], debts: [], physicalAssets: [] },
     };

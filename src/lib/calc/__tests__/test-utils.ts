@@ -294,6 +294,7 @@ export const createDefaultMarketAssumptions = (): MarketAssumptionsInputs => ({
 // ============================================================================
 
 export const createSimulatorInputs = (overrides?: Partial<SimulatorInputs>): SimulatorInputs => ({
+  country: overrides?.country ?? 'US',
   timeline: overrides?.timeline !== undefined ? overrides.timeline : createDefaultTimeline(),
   incomes: overrides?.incomes ?? {},
   expenses: overrides?.expenses ?? {},

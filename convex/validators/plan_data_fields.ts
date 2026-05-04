@@ -15,6 +15,7 @@ import { simulationSettingsValidator } from './simulation_settings_validator';
 
 /** Plan data fields shared between `plans` and `planSnapshots` tables. */
 export const planDataFields = {
+  country: v.optional(v.string()),
   timeline: v.union(timelineValidator, v.null()),
   incomes: v.array(incomeValidator),
   expenses: v.array(expenseValidator),

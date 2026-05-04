@@ -6,36 +6,32 @@
  * during the portfolio contribution waterfall.
  */
 
-import {
-  type ContributionInputs,
-  sharedLimitAccounts,
-  getAccountTypeLimitKey,
-  getAnnualContributionLimit,
-  getAnnualSection415cLimit,
-  supportsMegaBackdoorRoth,
-} from '@/lib/schemas/inputs/contribution-form-schema';
-import type { AccountInputs } from '@/lib/schemas/inputs/account-form-schema';
+import { type ContributionInputs, buildContributionHelpers } from '@/lib/schemas/inputs/contribution-form-schema';
+import type { CountryConfig } from '@/lib/country/types';
+import { usConfig } from '@/lib/country/configs/us';
 
 import { Account } from './account';
 import type { IncomesData } from './incomes';
 
-/** Aggregates contributions by account type across all rules for shared IRS limit enforcement */
+type ContributionHelpers = ReturnType<typeof buildContributionHelpers>;
+
+/** Aggregates contributions by account type across all rules for shared limit enforcement */
 export class ContributionTracker {
-  private employeeByType = new Map<AccountInputs['type'], number>();
-  private employerByType = new Map<AccountInputs['type'], number>();
+  private employeeByType = new Map<string, number>();
+  private employerByType = new Map<string, number>();
   private employeeByIncome = new Map<string, number>();
 
-  recordContribution(accountType: AccountInputs['type'], employee: number, employer: number, incomeId: string | undefined): void {
+  recordContribution(accountType: string, employee: number, employer: number, incomeId: string | undefined): void {
     this.employeeByType.set(accountType, (this.employeeByType.get(accountType) ?? 0) + employee);
     this.employerByType.set(accountType, (this.employerByType.get(accountType) ?? 0) + employer);
     if (incomeId) this.employeeByIncome.set(incomeId, (this.employeeByIncome.get(incomeId) ?? 0) + employee);
   }
 
-  getEmployeeByTypes(types: AccountInputs['type'][]): number {
+  getEmployeeByTypes(types: string[]): number {
     return types.reduce((sum, t) => sum + (this.employeeByType.get(t) ?? 0), 0);
   }
 
-  getEmployerByTypes(types: AccountInputs['type'][]): number {
+  getEmployerByTypes(types: string[]): number {
     return types.reduce((sum, t) => sum + (this.employerByType.get(t) ?? 0), 0);
   }
 
@@ -61,10 +57,12 @@ export class ContributionRules {
 
   constructor(
     rules: ContributionInputs[],
-    private baseRule: { type: 'spend' | 'save' }
+    private baseRule: { type: 'spend' | 'save' },
+    countryConfig: CountryConfig = usConfig
   ) {
     this.tracker = new ContributionTracker();
-    this.contributionRules = rules.filter((rule) => !rule.disabled).map((rule) => new ContributionRule(rule, this.tracker));
+    const helpers = buildContributionHelpers(countryConfig);
+    this.contributionRules = rules.filter((rule) => !rule.disabled).map((rule) => new ContributionRule(rule, this.tracker, helpers));
   }
 
   getRules(): ContributionRule[] {
@@ -96,7 +94,8 @@ export class ContributionRule {
 
   constructor(
     private contributionInput: ContributionInputs,
-    private tracker: ContributionTracker
+    private tracker: ContributionTracker,
+    private helpers: ContributionHelpers
   ) {}
 
   /**
@@ -133,7 +132,7 @@ export class ContributionRule {
   }
 
   /** Records a committed contribution against per-rule YTD counters and the shared tracker */
-  recordContribution(employee: number, employer: number, accountType: AccountInputs['type']): void {
+  recordContribution(employee: number, employer: number, accountType: string): void {
     this.ytdEmployeeContribution += employee;
     this.ytdEmployerMatch += employer;
     this.tracker.recordContribution(accountType, employee, employer, this.contributionInput.incomeId);
@@ -179,23 +178,20 @@ export class ContributionRule {
 
   private calculateRemainingAccountTypeLimit(account: Account, age: number): number {
     const accountType = account.getAccountType();
+    const sharedGroup = this.helpers.getSharedLimitAccounts(accountType);
+    if (!sharedGroup.length) return Infinity;
 
-    const accountTypeGroup = sharedLimitAccounts[accountType];
-    if (!accountTypeGroup) return Infinity;
-
-    if (this.contributionInput.enableMegaBackdoorRoth && supportsMegaBackdoorRoth(accountType)) {
-      const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(accountTypeGroup);
-      const employerMatchSoFar = this.tracker.getEmployerByTypes(accountTypeGroup);
-
+    if (this.contributionInput.enableMegaBackdoorRoth && this.helpers.supportsMegaBackdoorRoth(accountType)) {
+      const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(sharedGroup);
+      const employerMatchSoFar = this.tracker.getEmployerByTypes(sharedGroup);
       const totalContributionsSoFar = employeeContributionsSoFar + employerMatchSoFar;
-
-      return Math.max(0, getAnnualSection415cLimit(age) - totalContributionsSoFar);
+      return Math.max(0, this.helpers.getAnnualSection415cLimit(accountType, age) - totalContributionsSoFar);
     }
 
-    const limit = getAnnualContributionLimit(getAccountTypeLimitKey(accountType), age);
+    const limit = this.helpers.getAnnualContributionLimit(accountType, age);
     if (!Number.isFinite(limit)) return Infinity;
 
-    const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(accountTypeGroup);
+    const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(sharedGroup);
     return Math.max(0, limit - employeeContributionsSoFar);
   }
 }

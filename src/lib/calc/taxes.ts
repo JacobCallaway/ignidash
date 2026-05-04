@@ -1,13 +1,13 @@
 /**
- * Federal tax calculation engine
+ * Tax calculation engine
  *
  * Computes income tax, capital gains tax, NIIT, Social Security taxation,
- * and early withdrawal penalties. Handles progressive bracket stacking,
- * capital loss carryover, and Section 121 primary residence exclusion.
+ * and early withdrawal penalties. All country-specific values come from
+ * CountryConfig — no hardcoded tax data.
  */
 
-import type { AccountInputs } from '@/lib/schemas/inputs/account-form-schema';
 import type { FilingStatus } from '@/lib/schemas/inputs/tax-settings-form-schema';
+import type { CountryConfig, TaxBracket } from '@/lib/country/types';
 
 import type { SimulationState } from './simulation-engine';
 import type { IncomesData } from './incomes';
@@ -15,31 +15,10 @@ import type { PortfolioData } from './portfolio';
 import type { ReturnsData } from './returns';
 import type { PhysicalAssetsData } from './physical-assets';
 import { sumFlows } from './asset';
-import {
-  STANDARD_DEDUCTION_SINGLE,
-  STANDARD_DEDUCTION_MARRIED_FILING_JOINTLY,
-  STANDARD_DEDUCTION_HEAD_OF_HOUSEHOLD,
-} from './tax-data/standard-deduction';
-import {
-  type FederalIncomeTaxBracket,
-  FEDERAL_INCOME_TAX_BRACKETS_SINGLE,
-  FEDERAL_INCOME_TAX_BRACKETS_MARRIED_FILING_JOINTLY,
-  FEDERAL_INCOME_TAX_BRACKETS_HEAD_OF_HOUSEHOLD,
-} from './tax-data/federal-income-tax-brackets';
-import {
-  type CapitalGainsTaxBracket,
-  CAPITAL_GAINS_TAX_BRACKETS_SINGLE,
-  CAPITAL_GAINS_TAX_BRACKETS_MARRIED_FILING_JOINTLY,
-  CAPITAL_GAINS_TAX_BRACKETS_HEAD_OF_HOUSEHOLD,
-} from './tax-data/capital-gains-tax-brackets';
-import { NIIT_RATE, NIIT_THRESHOLDS } from './tax-data/niit-thresholds';
-import {
-  type SocialSecurityTaxThreshold,
-  SOCIAL_SECURITY_TAX_THRESHOLDS_SINGLE,
-  SOCIAL_SECURITY_TAX_THRESHOLDS_MARRIED_FILING_JOINTLY,
-  SOCIAL_SECURITY_TAX_THRESHOLDS_HEAD_OF_HOUSEHOLD,
-} from './tax-data/social-security-tax-brackets';
-import { SECTION_121_EXCLUSION } from './tax-data/section-121-exclusion';
+
+// Backward-compat type aliases for consumers that imported these from taxes.ts
+export type FederalIncomeTaxBracket = TaxBracket;
+export type CapitalGainsTaxBracket = TaxBracket;
 
 export interface CapitalGainsTaxesData {
   taxableIncomeTaxedAsCapitalGains: number;
@@ -75,15 +54,15 @@ export interface TaxesData {
   totalTaxesDue: number;
   totalTaxesRefund: number;
   totalTaxableIncome: number;
-  /** Above-the-line adjustments: tax-deferred contributions (401k/IRA/HSA), capital loss deduction, Section 121 exclusion */
+  /** Above-the-line adjustments: tax-deferred contributions, capital loss deduction, Section 121 exclusion */
   adjustments: Record<string, number>;
-  /** Below-the-line deductions: standard deduction (itemized deductions not modeled) */
+  /** Below-the-line deductions: standard deduction */
   deductions: Record<string, number>;
 }
 
 export interface EarlyWithdrawalPenaltyData {
-  taxDeferredPenaltyAmount: number;
-  taxFreePenaltyAmount: number;
+  /** Penalty amount per penalty group id */
+  perGroupAmount: Record<string, number>;
   totalPenaltyAmount: number;
 }
 
@@ -121,21 +100,19 @@ export interface IncomeSourcesData {
   adjustedIncomeTaxedAsOrdinary: number;
   adjustedIncomeTaxedAsCapitalGains: number;
   totalIncome: number;
-  earlyWithdrawals: {
-    rothEarnings: number;
-    '401kAndIra': number;
-    hsa: number;
-  };
+  /** Early withdrawal amounts keyed by penalty group id */
+  earlyWithdrawals: Record<string, number>;
 }
 
-/** Computes annual federal taxes across all tax types for a simulation year */
+/** Computes annual taxes across all tax types for a simulation year */
 export class TaxProcessor {
   private capitalLossCarryover = 0;
   private capitalLossCarryoverSnapshot: number | null = null;
 
   constructor(
     private simulationState: SimulationState,
-    private filingStatus: FilingStatus
+    private filingStatus: FilingStatus,
+    private countryConfig: CountryConfig
   ) {}
 
   /** Save carryover state before first tax calculation of the year */
@@ -151,7 +128,7 @@ export class TaxProcessor {
   }
 
   /**
-   * Calculates all federal taxes for one simulation year
+   * Calculates all taxes for one simulation year
    * @param annualPortfolioDataBeforeTaxes - Portfolio data before tax withdrawals
    * @param annualIncomesData - Aggregated annual income data
    * @param annualReturnsData - Annual investment return data
@@ -186,7 +163,7 @@ export class TaxProcessor {
     const taxableIncomeTaxedAsOrdinary = Math.max(0, incomeData.adjustedIncomeTaxedAsOrdinary - deductionUsedForOrdinary);
     const taxableIncomeTaxedAsCapitalGains = Math.max(0, incomeData.adjustedIncomeTaxedAsCapitalGains - deductionUsedForGains);
 
-    const { federalIncomeTaxAmount, topMarginalFederalIncomeTaxRate, federalIncomeTaxBrackets } = this.processFederalIncomeTaxes({
+    const { federalIncomeTaxAmount, topMarginalFederalIncomeTaxRate, federalIncomeTaxBrackets } = this.processIncomeTaxes({
       taxableIncomeTaxedAsOrdinary,
     });
     const federalIncomeTaxes: FederalIncomeTaxesData = {
@@ -215,12 +192,12 @@ export class TaxProcessor {
 
     const earlyWithdrawalPenalties = this.processEarlyWithdrawalPenalties(incomeData.earlyWithdrawals);
 
-    const totalTaxLiabilityExcludingFICA =
+    const totalTaxLiability =
       federalIncomeTaxes.federalIncomeTaxAmount +
       capitalGainsTaxes.capitalGainsTaxAmount +
       niit.niitAmount +
       earlyWithdrawalPenalties.totalPenaltyAmount;
-    const difference = totalTaxLiabilityExcludingFICA - annualIncomesData.totalAmountWithheld;
+    const difference = totalTaxLiability - annualIncomesData.totalAmountWithheld;
 
     return {
       federalIncomeTaxes,
@@ -249,49 +226,41 @@ export class TaxProcessor {
     annualPhysicalAssetsData: PhysicalAssetsData
   ): IncomeSourcesData {
     const age = this.simulationState.time.age;
-
-    const regularQualifiedWithdrawalAge = 59.5;
-    const hsaQualifiedWithdrawalAge = 65;
+    const earlyWithdrawals: Record<string, number> = {};
 
     let taxDeferredWithdrawals = 0;
-    let earlyRothEarningsWithdrawals = 0;
-    let early401kAndIraWithdrawals = 0;
-    let earlyHsaWithdrawals = 0;
+    let earlyTaxFreeEarningsWithdrawals = 0;
 
     for (const account of Object.values(annualPortfolioDataBeforeTaxes.perAccountData)) {
-      switch (account.type) {
-        case 'roth401k':
-        case 'roth403b':
-        case 'rothIra': {
-          if (age < regularQualifiedWithdrawalAge) {
-            const annualEarningsWithdrawn = account.earningsWithdrawn;
+      const typeConfig = this.countryConfig.accountTypes.find((t) => t.id === account.type);
+      if (!typeConfig) continue;
 
-            earlyRothEarningsWithdrawals += annualEarningsWithdrawn;
-          }
-          break;
-        }
-        case '401k':
-        case '403b':
-        case 'ira': {
-          const annualWithdrawals = sumFlows(account.withdrawals);
+      const penaltyGroupId = typeConfig.earlyWithdrawalPenaltyGroupId;
+      const penaltyFreeAge = typeConfig.penaltyFreeWithdrawalAge ?? Infinity;
+      const isEarly = penaltyGroupId !== undefined && age < penaltyFreeAge;
 
-          taxDeferredWithdrawals += annualWithdrawals;
-          if (age < regularQualifiedWithdrawalAge) early401kAndIraWithdrawals += annualWithdrawals;
-          break;
-        }
-        case 'hsa': {
-          const annualWithdrawals = sumFlows(account.withdrawals);
+      if (typeConfig.taxCategory === 'taxDeferred') {
+        const withdrawalAmount = sumFlows(account.withdrawals);
+        const taxableFraction = 1 - (typeConfig.taxFreeLumpSumPercent ?? 0);
+        taxDeferredWithdrawals += withdrawalAmount * taxableFraction;
 
-          taxDeferredWithdrawals += annualWithdrawals;
-          if (age < hsaQualifiedWithdrawalAge) earlyHsaWithdrawals += annualWithdrawals;
-          break;
+        if (isEarly && penaltyGroupId) {
+          earlyWithdrawals[penaltyGroupId] = (earlyWithdrawals[penaltyGroupId] ?? 0) + withdrawalAmount;
         }
-        default:
-          break;
+      } else if (typeConfig.taxCategory === 'taxFree' && isEarly && penaltyGroupId) {
+        const penaltyGroup = this.countryConfig.earlyWithdrawalPenaltyGroups.find((g) => g.id === penaltyGroupId);
+        if (penaltyGroup?.earningsOnly) {
+          const earningsWithdrawn = account.earningsWithdrawn ?? 0;
+          earlyWithdrawals[penaltyGroupId] = (earlyWithdrawals[penaltyGroupId] ?? 0) + earningsWithdrawn;
+          earlyTaxFreeEarningsWithdrawals += earningsWithdrawn;
+        } else {
+          const withdrawalAmount = sumFlows(account.withdrawals);
+          earlyWithdrawals[penaltyGroupId] = (earlyWithdrawals[penaltyGroupId] ?? 0) + withdrawalAmount;
+        }
       }
     }
 
-    const taxableRetirementDistributions = taxDeferredWithdrawals + earlyRothEarningsWithdrawals;
+    const taxableRetirementDistributions = taxDeferredWithdrawals + earlyTaxFreeEarningsWithdrawals;
     const { realizedGains, capitalLossDeduction, section121Exclusion } = this.getRealizedGainsAndCapLossDeductionData(
       annualPortfolioDataBeforeTaxes,
       annualPhysicalAssetsData
@@ -300,7 +269,8 @@ export class TaxProcessor {
     const taxableInterestIncome = annualReturnsData.yieldAmounts.taxable.bonds + annualReturnsData.yieldAmounts.cashSavings.cash;
 
     const totalIncomeFromIncomes = annualIncomesData.totalIncome;
-    const socialSecurityIncome = annualIncomesData.totalSocialSecurityIncome;
+    // SS-like income only separated out when the country has SS-specific tax rules
+    const socialSecurityIncome = this.countryConfig.socialSecurityTax ? annualIncomesData.totalSocialSecurityIncome : 0;
     const taxFreeIncome = annualIncomesData.totalTaxFreeIncome;
     const earnedIncome = totalIncomeFromIncomes - socialSecurityIncome - taxFreeIncome;
 
@@ -308,11 +278,8 @@ export class TaxProcessor {
     const incomeTaxedAsLtcg = realizedGains + taxableDividendIncome;
     const grossIncomeExceptSocSec = incomeTaxedAsOrdinaryExceptSocSec + incomeTaxedAsLtcg;
 
-    const taxDeferredAccountTypes: AccountInputs['type'][] = ['401k', '403b', 'ira', 'hsa'];
-    const taxDeductibleContributions = this.getEmployeeContributionsForAccountTypes(
-      annualPortfolioDataBeforeTaxes,
-      taxDeferredAccountTypes
-    );
+    const taxDeferredAccountIds = new Set(this.countryConfig.accountTypes.filter((t) => t.taxCategory === 'taxDeferred').map((t) => t.id));
+    const taxDeductibleContributions = this.getEmployeeContributionsForAccountTypes(annualPortfolioDataBeforeTaxes, taxDeferredAccountIds);
 
     const totalAdjustments = taxDeductibleContributions + capitalLossDeduction;
     const adjustmentsAppliedToOrdinary = Math.min(totalAdjustments, incomeTaxedAsOrdinaryExceptSocSec);
@@ -357,11 +324,7 @@ export class TaxProcessor {
       adjustedIncomeTaxedAsOrdinary,
       adjustedIncomeTaxedAsCapitalGains,
       totalIncome,
-      earlyWithdrawals: {
-        rothEarnings: earlyRothEarningsWithdrawals,
-        '401kAndIra': early401kAndIraWithdrawals,
-        hsa: earlyHsaWithdrawals,
-      },
+      earlyWithdrawals,
     };
   }
 
@@ -393,8 +356,8 @@ export class TaxProcessor {
     return { realizedGains: 0, capitalLossDeduction, section121Exclusion };
   }
 
-  /** Calculates progressive income tax across ordinary income brackets (IRC §1) */
-  private processFederalIncomeTaxes({ taxableIncomeTaxedAsOrdinary }: { taxableIncomeTaxedAsOrdinary: number }): {
+  /** Calculates progressive income tax across ordinary income brackets */
+  private processIncomeTaxes({ taxableIncomeTaxedAsOrdinary }: { taxableIncomeTaxedAsOrdinary: number }): {
     federalIncomeTaxAmount: number;
     topMarginalFederalIncomeTaxRate: number;
     federalIncomeTaxBrackets: FederalIncomeTaxBracket[];
@@ -402,7 +365,7 @@ export class TaxProcessor {
     let federalIncomeTaxAmount = 0;
     let topMarginalFederalIncomeTaxRate = 0;
 
-    const federalIncomeTaxBrackets = this.getFederalIncomeTaxBrackets();
+    const federalIncomeTaxBrackets = this.getIncomeTaxBrackets();
     for (const bracket of federalIncomeTaxBrackets) {
       if (taxableIncomeTaxedAsOrdinary <= bracket.min) break;
 
@@ -415,7 +378,7 @@ export class TaxProcessor {
   }
 
   /**
-   * Calculates capital gains tax with bracket stacking (IRC §1(h))
+   * Calculates capital gains tax with bracket stacking
    *
    * Capital gains are stacked on top of ordinary income to determine
    * the applicable bracket, then only the gains portion is taxed.
@@ -452,10 +415,14 @@ export class TaxProcessor {
     return { capitalGainsTaxAmount, topMarginalCapitalGainsTaxRate, capitalGainsTaxBrackets };
   }
 
-  /** Calculates Net Investment Income Tax — IRC §1411: 3.8% on lesser of NII or MAGI over threshold */
+  /** Calculates Net Investment Income Tax — only when config defines niit */
   private processNIIT(incomeData: IncomeSourcesData): NIITData {
-    const threshold = NIIT_THRESHOLDS[this.filingStatus];
+    const niitConfig = this.countryConfig.niit;
+    if (!niitConfig) {
+      return { netInvestmentIncome: 0, incomeSubjectToNiit: 0, niitAmount: 0, threshold: 0 };
+    }
 
+    const threshold = niitConfig.thresholds[this.filingStatus] ?? Infinity;
     const { taxableDividendIncome, taxableInterestIncome, capitalLossDeduction, realizedGains, adjustedGrossIncome } = incomeData;
 
     const otherInvestmentIncome = Math.max(0, taxableDividendIncome + taxableInterestIncome - capitalLossDeduction);
@@ -463,25 +430,31 @@ export class TaxProcessor {
 
     const magiOverThreshold = Math.max(0, adjustedGrossIncome - threshold);
     const incomeSubjectToNiit = Math.min(netInvestmentIncome, magiOverThreshold);
-    const niitAmount = incomeSubjectToNiit * NIIT_RATE;
+    const niitAmount = incomeSubjectToNiit * niitConfig.rate;
 
     return { netInvestmentIncome, incomeSubjectToNiit, niitAmount, threshold };
   }
 
-  /** Calculates early withdrawal penalties — IRC §72(t): 10% for 401k/IRA; IRC §223(f)(4): 20% for HSA */
-  private processEarlyWithdrawalPenalties(earlyWithdrawalsData: IncomeSourcesData['earlyWithdrawals']): EarlyWithdrawalPenaltyData {
-    const taxDeferredPenaltyAmount = earlyWithdrawalsData['401kAndIra'] * 0.1 + earlyWithdrawalsData.hsa * 0.2;
-    const taxFreePenaltyAmount = earlyWithdrawalsData.rothEarnings * 0.1;
+  /** Calculates early withdrawal penalties based on countryConfig.earlyWithdrawalPenaltyGroups */
+  private processEarlyWithdrawalPenalties(earlyWithdrawalsData: Record<string, number>): EarlyWithdrawalPenaltyData {
+    const perGroupAmount: Record<string, number> = {};
+    let totalPenaltyAmount = 0;
 
-    return { taxDeferredPenaltyAmount, taxFreePenaltyAmount, totalPenaltyAmount: taxDeferredPenaltyAmount + taxFreePenaltyAmount };
+    for (const group of this.countryConfig.earlyWithdrawalPenaltyGroups) {
+      const withdrawalAmount = earlyWithdrawalsData[group.id] ?? 0;
+      const penalty = withdrawalAmount * group.rate;
+      perGroupAmount[group.id] = penalty;
+      totalPenaltyAmount += penalty;
+    }
+
+    return { perGroupAmount, totalPenaltyAmount };
   }
 
   /**
    * Determines taxable portion of Social Security benefits (IRC §86)
    *
-   * Uses provisional income (AGI + tax-exempt interest + 50% of SS benefits) to
-   * determine 0%, 50%, or up to 85% taxable. Maximum 85% of benefits can be
-   * taxed regardless of income level.
+   * Only called when countryConfig.socialSecurityTax is defined. Uses provisional income
+   * (AGI + 50% of SS benefits) to determine 0%, 50%, or up to 85% taxable.
    */
   private getTaxablePortionOfSocialSecurityIncome({
     provisionalIncome,
@@ -490,7 +463,15 @@ export class TaxProcessor {
     provisionalIncome: number;
     socialSecurityIncome: number;
   }): { taxableSocialSecurityIncome: number; maxTaxableSocialSecurityPercentage: number } {
-    const thresholds = this.getSocialSecurityTaxThresholds();
+    const ssTaxConfig = this.countryConfig.socialSecurityTax;
+    if (!ssTaxConfig || socialSecurityIncome === 0) {
+      return { taxableSocialSecurityIncome: 0, maxTaxableSocialSecurityPercentage: 0 };
+    }
+
+    const thresholds = ssTaxConfig.thresholds[this.filingStatus];
+    if (!thresholds || thresholds.length < 3) {
+      return { taxableSocialSecurityIncome: 0, maxTaxableSocialSecurityPercentage: 0 };
+    }
 
     if (provisionalIncome <= thresholds[0].max) return { taxableSocialSecurityIncome: 0, maxTaxableSocialSecurityPercentage: 0 };
 
@@ -514,65 +495,30 @@ export class TaxProcessor {
     };
   }
 
-  private getEmployeeContributionsForAccountTypes(
-    annualPortfolioDataBeforeTaxes: PortfolioData,
-    accountTypes: AccountInputs['type'][]
-  ): number {
+  private getEmployeeContributionsForAccountTypes(annualPortfolioDataBeforeTaxes: PortfolioData, accountTypeIds: Set<string>): number {
     return Object.values(annualPortfolioDataBeforeTaxes.perAccountData)
-      .filter((account) => accountTypes.includes(account.type))
+      .filter((account) => accountTypeIds.has(account.type))
       .reduce((sum, account) => sum + (sumFlows(account.contributions) - account.employerMatch), 0);
   }
 
   private getStandardDeduction(): number {
-    switch (this.filingStatus) {
-      case 'single':
-        return STANDARD_DEDUCTION_SINGLE;
-      case 'marriedFilingJointly':
-        return STANDARD_DEDUCTION_MARRIED_FILING_JOINTLY;
-      case 'headOfHousehold':
-        return STANDARD_DEDUCTION_HEAD_OF_HOUSEHOLD;
-    }
+    return this.countryConfig.incomeTax[this.filingStatus]?.standardDeduction ?? 0;
   }
 
-  private getFederalIncomeTaxBrackets(): FederalIncomeTaxBracket[] {
-    switch (this.filingStatus) {
-      case 'single':
-        return FEDERAL_INCOME_TAX_BRACKETS_SINGLE;
-      case 'marriedFilingJointly':
-        return FEDERAL_INCOME_TAX_BRACKETS_MARRIED_FILING_JOINTLY;
-      case 'headOfHousehold':
-        return FEDERAL_INCOME_TAX_BRACKETS_HEAD_OF_HOUSEHOLD;
-    }
+  private getIncomeTaxBrackets(): TaxBracket[] {
+    return this.countryConfig.incomeTax[this.filingStatus]?.brackets ?? [];
   }
 
-  private getCapitalGainsTaxBrackets(): CapitalGainsTaxBracket[] {
-    switch (this.filingStatus) {
-      case 'single':
-        return CAPITAL_GAINS_TAX_BRACKETS_SINGLE;
-      case 'marriedFilingJointly':
-        return CAPITAL_GAINS_TAX_BRACKETS_MARRIED_FILING_JOINTLY;
-      case 'headOfHousehold':
-        return CAPITAL_GAINS_TAX_BRACKETS_HEAD_OF_HOUSEHOLD;
-    }
+  private getCapitalGainsTaxBrackets(): TaxBracket[] {
+    return this.countryConfig.capitalGainsTax[this.filingStatus]?.brackets ?? [];
   }
 
-  private getSocialSecurityTaxThresholds(): SocialSecurityTaxThreshold[] {
-    switch (this.filingStatus) {
-      case 'single':
-        return SOCIAL_SECURITY_TAX_THRESHOLDS_SINGLE;
-      case 'marriedFilingJointly':
-        return SOCIAL_SECURITY_TAX_THRESHOLDS_MARRIED_FILING_JOINTLY;
-      case 'headOfHousehold':
-        return SOCIAL_SECURITY_TAX_THRESHOLDS_HEAD_OF_HOUSEHOLD;
-    }
-  }
-
-  /** Applies Section 121 exclusion for primary residence sale gains */
+  /** Applies Section 121 exclusion for primary residence sale gains (if configured) */
   private getSection121Exclusion(physicalAssetsData: PhysicalAssetsData): {
     section121Exclusion: number;
     physicalAssetRealizedGains: number;
   } {
-    const maxExclusion = SECTION_121_EXCLUSION[this.filingStatus];
+    const maxExclusion = this.countryConfig.primaryResidenceExclusion?.[this.filingStatus] ?? 0;
 
     // Technically, there should only be one primary residence asset, but just in case...
     const section121Exclusion = Object.values(physicalAssetsData.perAssetData)
