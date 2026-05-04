@@ -36,26 +36,17 @@ import type { SimulationResult } from '@/lib/calc/simulation-engine';
 // CONVEX → ZOD
 // ============================================================================
 
-// percentBonds is optional in Convex (not applicable to savings), but guaranteed by the
-// Zod discriminated union for investment account types — hence the non-null assertions.
 export function accountFromConvex(account: Doc<'plans'>['accounts'][number]): AccountInputs {
-  const base = { id: account.id, name: account.name, balance: account.balance, syncedFinanceId: account.syncedFinanceId };
-
-  switch (account.type) {
-    case 'savings':
-      return { ...base, type: 'savings' };
-    case 'taxableBrokerage':
-      return { ...base, type: 'taxableBrokerage', percentBonds: account.percentBonds!, costBasis: account.costBasis };
-    case 'roth401k':
-    case 'roth403b':
-    case 'rothIra':
-      return { ...base, type: account.type, percentBonds: account.percentBonds!, contributionBasis: account.contributionBasis };
-    case '401k':
-    case '403b':
-    case 'ira':
-    case 'hsa':
-      return { ...base, type: account.type, percentBonds: account.percentBonds! };
-  }
+  return {
+    id: account.id,
+    name: account.name,
+    balance: account.balance,
+    type: account.type,
+    syncedFinanceId: account.syncedFinanceId,
+    percentBonds: account.percentBonds,
+    costBasis: account.costBasis,
+    contributionBasis: account.contributionBasis,
+  };
 }
 
 // Flattens nested amount union ({ type, dollarAmount }) into top-level fields (contributionType, dollarAmount).
@@ -181,6 +172,7 @@ export function simulatorFromConvex(plan: Doc<'plans'>): SimulatorInputs {
   const contributionRules = Object.fromEntries(plan.contributionRules.map((rule) => [rule.id, contributionFromConvex(rule)]));
 
   return {
+    country: plan.country ?? 'US',
     timeline: timelineFromConvex(plan.timeline),
     incomes,
     accounts,
@@ -214,23 +206,16 @@ export function glidePathFromConvex(glidePath: Doc<'plans'>['glidePath']): Glide
 // ============================================================================
 
 export function accountToConvex(account: AccountInputs): Doc<'plans'>['accounts'][number] {
-  const base = { id: account.id, name: account.name, balance: account.balance, syncedFinanceId: account.syncedFinanceId };
-
-  switch (account.type) {
-    case 'savings':
-      return { ...base, type: 'savings' };
-    case 'taxableBrokerage':
-      return { ...base, type: 'taxableBrokerage', percentBonds: account.percentBonds, costBasis: account.costBasis };
-    case 'roth401k':
-    case 'roth403b':
-    case 'rothIra':
-      return { ...base, type: account.type, percentBonds: account.percentBonds, contributionBasis: account.contributionBasis };
-    case '401k':
-    case '403b':
-    case 'ira':
-    case 'hsa':
-      return { ...base, type: account.type, percentBonds: account.percentBonds };
-  }
+  return {
+    id: account.id,
+    name: account.name,
+    balance: account.balance,
+    type: account.type,
+    syncedFinanceId: account.syncedFinanceId,
+    percentBonds: account.percentBonds,
+    costBasis: account.costBasis,
+    contributionBasis: account.contributionBasis,
+  };
 }
 
 // Re-nests flat contributionType/dollarAmount back into the amount union.

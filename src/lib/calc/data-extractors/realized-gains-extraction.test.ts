@@ -68,8 +68,7 @@ function createZeroTaxesData(realizedGains: number): TaxesData {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: 0,

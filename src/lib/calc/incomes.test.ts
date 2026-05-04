@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
+import { usConfig } from '@/lib/country/configs/us';
 import type { IncomeInputs } from '@/lib/schemas/inputs/income-form-schema';
 
 import { Income, Incomes, IncomesProcessor } from './incomes';
@@ -54,7 +55,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'now' }, end: undefined },
-        })
+        }),
+        usConfig
       );
 
       const simState = createSimulationState();
@@ -65,7 +67,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'customAge', age: 40 }, end: undefined },
-        })
+        }),
+        usConfig
       );
 
       // Before age 40
@@ -85,7 +88,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'customDate', year: 2025, month: 6 }, end: undefined },
-        })
+        }),
+        usConfig
       );
 
       // Before June 2025
@@ -105,7 +109,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'atRetirement' }, end: undefined },
-        })
+        }),
+        usConfig
       );
 
       // Pre-retirement phase
@@ -127,7 +132,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'now' }, end: undefined },
-        })
+        }),
+        usConfig
       );
 
       const simState = createSimulationState({ time: { age: 100, year: 2089, month: 1, date: new Date(2089, 0, 1) } });
@@ -138,7 +144,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'now' }, end: { type: 'customAge', age: 65 } },
-        })
+        }),
+        usConfig
       );
 
       // Before age 65
@@ -158,7 +165,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'now' }, end: { type: 'customDate', year: 2030, month: 12 } },
-        })
+        }),
+        usConfig
       );
 
       // Before December 2030
@@ -178,7 +186,8 @@ describe('Income Timeframe Tests', () => {
       const income = new Income(
         createIncomeInput({
           timeframe: { start: { type: 'now' }, end: { type: 'atRetirement' } },
-        })
+        }),
+        usConfig
       );
 
       // Pre-retirement phase
@@ -203,7 +212,8 @@ describe('Income Timeframe Tests', () => {
             start: { type: 'customAge', age: 30 },
             end: { type: 'customAge', age: 65 },
           },
-        })
+        }),
+        usConfig
       );
 
       // Before range
@@ -228,7 +238,8 @@ describe('Income Growth Rate Tests', () => {
         amount: 10000, // $10k/month = $120k/year
         frequency: 'monthly',
         growth: { growthRate: 3, growthLimit: undefined }, // 3% annual growth
-      })
+      }),
+      usConfig
     );
 
     // First call of year 1 - growth is applied (since lastYear starts at 0)
@@ -250,7 +261,8 @@ describe('Income Growth Rate Tests', () => {
         amount: 10000,
         frequency: 'monthly',
         growth: { growthRate: 5, growthLimit: undefined }, // 5% annual growth
-      })
+      }),
+      usConfig
     );
 
     // Year 1 (growth applied on first call since lastYear starts at 0)
@@ -271,7 +283,8 @@ describe('Income Growth Rate Tests', () => {
         amount: 10000,
         frequency: 'monthly',
         growth: { growthRate: 50, growthLimit: 130000 }, // 50% annual growth, max $130k/year
-      })
+      }),
+      usConfig
     );
 
     // Year 1: $120k annual ($10k/month)
@@ -289,7 +302,8 @@ describe('Income Growth Rate Tests', () => {
         amount: 10000,
         frequency: 'monthly',
         growth: { growthRate: -50, growthLimit: 60000 }, // -50% annual, min $60k/year
-      })
+      }),
+      usConfig
     );
 
     // Year 1: $120k annual
@@ -306,7 +320,8 @@ describe('Income Growth Rate Tests', () => {
         amount: 10000,
         frequency: 'monthly',
         growth: { growthRate: 0, growthLimit: undefined },
-      })
+      }),
+      usConfig
     );
 
     income.processMonthlyAmount(2024);
@@ -323,7 +338,8 @@ describe('Income Growth Rate Tests', () => {
         amount: 5000,
         frequency: 'monthly',
         growth: undefined,
-      })
+      }),
+      usConfig
     );
 
     income.processMonthlyAmount(2024);
@@ -342,7 +358,8 @@ describe('Income Type Tax Handling', () => {
         amount: 10000,
         frequency: 'monthly',
         taxes: { incomeType: 'wage', withholding: 22 }, // 22% withholding
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -361,7 +378,8 @@ describe('Income Type Tax Handling', () => {
         amount: 2500,
         frequency: 'monthly',
         taxes: { incomeType: 'socialSecurity', withholding: 10 }, // 10% voluntary withholding
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -379,7 +397,8 @@ describe('Income Type Tax Handling', () => {
         amount: 3000,
         frequency: 'monthly',
         taxes: { incomeType: 'exempt' },
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -398,7 +417,8 @@ describe('Income Type Tax Handling', () => {
         amount: 10000,
         frequency: 'monthly',
         taxes: { incomeType: 'wage', withholding: 0 },
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -410,29 +430,32 @@ describe('Income Type Tax Handling', () => {
   });
 
   it('mixed income types produce correct aggregate deductions', () => {
-    const incomes = new Incomes([
-      createIncomeInput({
-        id: 'wage',
-        name: 'Wage',
-        amount: 10000,
-        frequency: 'monthly',
-        taxes: { incomeType: 'wage', withholding: 22 },
-      }),
-      createIncomeInput({
-        id: 'ss',
-        name: 'Social Security',
-        amount: 2500,
-        frequency: 'monthly',
-        taxes: { incomeType: 'socialSecurity', withholding: 10 },
-      }),
-      createIncomeInput({
-        id: 'exempt',
-        name: 'Tax Free',
-        amount: 3000,
-        frequency: 'monthly',
-        taxes: { incomeType: 'exempt' },
-      }),
-    ]);
+    const incomes = new Incomes(
+      [
+        createIncomeInput({
+          id: 'wage',
+          name: 'Wage',
+          amount: 10000,
+          frequency: 'monthly',
+          taxes: { incomeType: 'wage', withholding: 22 },
+        }),
+        createIncomeInput({
+          id: 'ss',
+          name: 'Social Security',
+          amount: 2500,
+          frequency: 'monthly',
+          taxes: { incomeType: 'socialSecurity', withholding: 10 },
+        }),
+        createIncomeInput({
+          id: 'exempt',
+          name: 'Tax Free',
+          amount: 3000,
+          frequency: 'monthly',
+          taxes: { incomeType: 'exempt' },
+        }),
+      ],
+      usConfig
+    );
 
     const simState = createSimulationState();
     const processor = new IncomesProcessor(simState, incomes);
@@ -454,7 +477,8 @@ describe('Income Type Tax Handling', () => {
         amount: 4000,
         frequency: 'monthly',
         taxes: { incomeType: 'pension' },
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -472,7 +496,8 @@ describe('Income Frequency Tests', () => {
       createIncomeInput({
         amount: 10000,
         frequency: 'monthly',
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -484,7 +509,8 @@ describe('Income Frequency Tests', () => {
       createIncomeInput({
         amount: 120000, // Annual amount
         frequency: 'yearly',
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -497,7 +523,8 @@ describe('Income Frequency Tests', () => {
       createIncomeInput({
         amount: 30000, // Per quarter
         frequency: 'quarterly',
-      })
+      }),
+      usConfig
     );
 
     const result = income.processMonthlyAmount(2024);
@@ -536,7 +563,8 @@ describe('Income Frequency Tests', () => {
       createIncomeInput({
         amount: 50000, // One-time bonus
         frequency: 'oneTime',
-      })
+      }),
+      usConfig
     );
 
     // First month - full amount
@@ -555,23 +583,26 @@ describe('Income Frequency Tests', () => {
 
 describe('Incomes Collection Tests', () => {
   it('filters active incomes by timeframe', () => {
-    const incomes = new Incomes([
-      createIncomeInput({
-        id: 'active',
-        name: 'Active Income',
-        timeframe: { start: { type: 'now' }, end: undefined },
-      }),
-      createIncomeInput({
-        id: 'future',
-        name: 'Future Income',
-        timeframe: { start: { type: 'customAge', age: 65 }, end: undefined },
-      }),
-      createIncomeInput({
-        id: 'past',
-        name: 'Past Income',
-        timeframe: { start: { type: 'now' }, end: { type: 'customAge', age: 30 } },
-      }),
-    ]);
+    const incomes = new Incomes(
+      [
+        createIncomeInput({
+          id: 'active',
+          name: 'Active Income',
+          timeframe: { start: { type: 'now' }, end: undefined },
+        }),
+        createIncomeInput({
+          id: 'future',
+          name: 'Future Income',
+          timeframe: { start: { type: 'customAge', age: 65 }, end: undefined },
+        }),
+        createIncomeInput({
+          id: 'past',
+          name: 'Past Income',
+          timeframe: { start: { type: 'now' }, end: { type: 'customAge', age: 30 } },
+        }),
+      ],
+      usConfig
+    );
 
     const simState = createSimulationState({ time: { age: 35, year: 2024, month: 1, date: new Date(2024, 0, 1) } });
     const activeIncomes = incomes.getActiveIncomesByTimeFrame(simState);
@@ -581,10 +612,13 @@ describe('Incomes Collection Tests', () => {
   });
 
   it('excludes disabled incomes', () => {
-    const incomes = new Incomes([
-      createIncomeInput({ id: 'enabled', name: 'Enabled', disabled: false }),
-      createIncomeInput({ id: 'disabled', name: 'Disabled', disabled: true }),
-    ]);
+    const incomes = new Incomes(
+      [
+        createIncomeInput({ id: 'enabled', name: 'Enabled', disabled: false }),
+        createIncomeInput({ id: 'disabled', name: 'Disabled', disabled: true }),
+      ],
+      usConfig
+    );
 
     const simState = createSimulationState();
     const activeIncomes = incomes.getActiveIncomesByTimeFrame(simState);
@@ -596,22 +630,25 @@ describe('Incomes Collection Tests', () => {
 
 describe('IncomesProcessor Tests', () => {
   it('aggregates multiple incomes correctly', () => {
-    const incomes = new Incomes([
-      createIncomeInput({
-        id: 'salary',
-        name: 'Salary',
-        amount: 10000,
-        frequency: 'monthly',
-        taxes: { incomeType: 'wage', withholding: 22 },
-      }),
-      createIncomeInput({
-        id: 'side-gig',
-        name: 'Side Gig',
-        amount: 2000,
-        frequency: 'monthly',
-        taxes: { incomeType: 'selfEmployment' },
-      }),
-    ]);
+    const incomes = new Incomes(
+      [
+        createIncomeInput({
+          id: 'salary',
+          name: 'Salary',
+          amount: 10000,
+          frequency: 'monthly',
+          taxes: { incomeType: 'wage', withholding: 22 },
+        }),
+        createIncomeInput({
+          id: 'side-gig',
+          name: 'Side Gig',
+          amount: 2000,
+          frequency: 'monthly',
+          taxes: { incomeType: 'selfEmployment' },
+        }),
+      ],
+      usConfig
+    );
 
     const simState = createSimulationState();
     const processor = new IncomesProcessor(simState, incomes);
@@ -624,22 +661,25 @@ describe('IncomesProcessor Tests', () => {
   });
 
   it('tracks Social Security income separately for provisional income', () => {
-    const incomes = new Incomes([
-      createIncomeInput({
-        id: 'pension',
-        name: 'Pension',
-        amount: 3000,
-        frequency: 'monthly',
-        taxes: { incomeType: 'pension' },
-      }),
-      createIncomeInput({
-        id: 'ss',
-        name: 'Social Security',
-        amount: 2500,
-        frequency: 'monthly',
-        taxes: { incomeType: 'socialSecurity', withholding: 0 },
-      }),
-    ]);
+    const incomes = new Incomes(
+      [
+        createIncomeInput({
+          id: 'pension',
+          name: 'Pension',
+          amount: 3000,
+          frequency: 'monthly',
+          taxes: { incomeType: 'pension' },
+        }),
+        createIncomeInput({
+          id: 'ss',
+          name: 'Social Security',
+          amount: 2500,
+          frequency: 'monthly',
+          taxes: { incomeType: 'socialSecurity', withholding: 0 },
+        }),
+      ],
+      usConfig
+    );
 
     const simState = createSimulationState();
     const processor = new IncomesProcessor(simState, incomes);
@@ -650,15 +690,18 @@ describe('IncomesProcessor Tests', () => {
   });
 
   it('annual data sums monthly data correctly', () => {
-    const incomes = new Incomes([
-      createIncomeInput({
-        id: 'salary',
-        name: 'Salary',
-        amount: 10000,
-        frequency: 'monthly',
-        taxes: { incomeType: 'wage', withholding: 22 },
-      }),
-    ]);
+    const incomes = new Incomes(
+      [
+        createIncomeInput({
+          id: 'salary',
+          name: 'Salary',
+          amount: 10000,
+          frequency: 'monthly',
+          taxes: { incomeType: 'wage', withholding: 22 },
+        }),
+      ],
+      usConfig
+    );
 
     const simState = createSimulationState();
     const processor = new IncomesProcessor(simState, incomes);

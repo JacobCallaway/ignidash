@@ -7,11 +7,15 @@ import {
   getAnnualSection415cLimit,
   sharedLimitAccounts,
   supportsMegaBackdoorRoth,
+  buildContributionHelpers,
 } from '@/lib/schemas/inputs/contribution-form-schema';
+import { usConfig } from '@/lib/country/configs/us';
 
 import { ContributionRules, ContributionRule, ContributionTracker } from './contribution-rules';
 import { TaxDeferredAccount, TaxFreeAccount, SavingsAccount } from './account';
 import type { IncomesData } from './incomes';
+
+const usHelpers = buildContributionHelpers(usConfig);
 
 // ============================================================================
 // Test Fixtures
@@ -128,7 +132,8 @@ describe('ContributionRules', () => {
             dollarAmount: 1000,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -145,7 +150,8 @@ describe('ContributionRules', () => {
             dollarAmount: 10000,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -162,7 +168,8 @@ describe('ContributionRules', () => {
             dollarAmount: 2000,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -182,7 +189,8 @@ describe('ContributionRules', () => {
             dollarAmount: 2000,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -205,7 +213,8 @@ describe('ContributionRules', () => {
             percentRemaining: 50,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -222,7 +231,8 @@ describe('ContributionRules', () => {
             percentRemaining: 100,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -241,7 +251,8 @@ describe('ContributionRules', () => {
             dollarAmount: 5000,
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -259,7 +270,8 @@ describe('ContributionRules', () => {
             accountId: '401k-1',
             employerMatch: 5000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -278,7 +290,8 @@ describe('ContributionRules', () => {
             contributionType: 'unlimited',
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -328,7 +341,8 @@ describe('ContributionRules', () => {
             contributionType: 'unlimited',
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -348,7 +362,8 @@ describe('ContributionRules', () => {
             contributionType: 'unlimited',
             accountId: '401k-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -382,7 +397,8 @@ describe('ContributionRules', () => {
             contributionType: 'unlimited',
             accountId: 'roth-ira-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRothIraAccount());
 
@@ -413,7 +429,8 @@ describe('ContributionRules', () => {
             contributionType: 'unlimited',
             accountId: 'hsa-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount({
           type: 'hsa',
@@ -458,7 +475,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           employerMatch: 2500,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -477,7 +495,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           employerMatch: 5000, // Higher than contribution
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -496,7 +515,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           employerMatch: 3000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -514,7 +534,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           employerMatch: 2000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -533,7 +554,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           employerMatch: 1500,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -557,7 +579,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           employerMatch: 2000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -584,7 +607,8 @@ describe('ContributionRules', () => {
             rank: 1,
             employerMatch: 7000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const ruleHsa = new ContributionRule(
           createContributionRule({
@@ -595,7 +619,8 @@ describe('ContributionRules', () => {
             rank: 2,
             employerMatch: 750,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
 
         const account401k = new TaxDeferredAccount(create401kAccount());
@@ -632,7 +657,8 @@ describe('ContributionRules', () => {
             rank: 1,
             employerMatch: 7000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const ruleHsa = new ContributionRule(
           createContributionRule({
@@ -643,7 +669,8 @@ describe('ContributionRules', () => {
             rank: 2,
             employerMatch: 750,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
 
         const account401k = new TaxDeferredAccount(create401kAccount());
@@ -685,7 +712,8 @@ describe('ContributionRules', () => {
           createContributionRule({ rank: 1, id: 'rule-1' }),
           createContributionRule({ rank: 2, id: 'rule-2' }),
         ],
-        { type: 'spend' }
+        { type: 'spend' },
+        usConfig
       );
 
       const orderedRules = rules.getRules().sort((a, b) => a.getRank() - b.getRank());
@@ -702,7 +730,8 @@ describe('ContributionRules', () => {
           createContributionRule({ rank: 2, id: 'rule-2', disabled: true }),
           createContributionRule({ rank: 3, id: 'rule-3', disabled: false }),
         ],
-        { type: 'spend' }
+        { type: 'spend' },
+        usConfig
       );
 
       expect(rules.getRules().length).toBe(2);
@@ -722,7 +751,8 @@ describe('ContributionRules', () => {
           accountId: 'savings-1',
           maxBalance: 15000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new SavingsAccount(createSavingsAccountInput({ balance: 12000 }));
 
@@ -740,7 +770,8 @@ describe('ContributionRules', () => {
           accountId: 'savings-1',
           maxBalance: 10000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new SavingsAccount(createSavingsAccountInput({ balance: 10000 }));
 
@@ -758,7 +789,8 @@ describe('ContributionRules', () => {
           accountId: 'savings-1',
           maxBalance: 15000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new SavingsAccount(createSavingsAccountInput({ balance: 12000 }));
 
@@ -777,7 +809,8 @@ describe('ContributionRules', () => {
           accountId: 'savings-1',
           maxBalance: 10000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new SavingsAccount(createSavingsAccountInput({ balance: 9000 }));
 
@@ -795,7 +828,8 @@ describe('ContributionRules', () => {
           accountId: 'savings-1',
           // No maxBalance set
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new SavingsAccount(createSavingsAccountInput({ balance: 1000000 }));
 
@@ -818,7 +852,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           incomeId: 'income-1',
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -861,7 +896,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           incomeId: 'income-1',
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -898,7 +934,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           incomeId: 'income-1',
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -936,7 +973,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           incomeId: 'income-1',
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -969,7 +1007,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           // No incomeId specified
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -985,12 +1024,12 @@ describe('ContributionRules', () => {
 
   describe('base contribution rule', () => {
     it('should return spend as base rule type', () => {
-      const rules = new ContributionRules([], { type: 'spend' });
+      const rules = new ContributionRules([], { type: 'spend' }, usConfig);
       expect(rules.getBaseRuleType()).toBe('spend');
     });
 
     it('should return save as base rule type', () => {
-      const rules = new ContributionRules([], { type: 'save' });
+      const rules = new ContributionRules([], { type: 'save' }, usConfig);
       expect(rules.getBaseRuleType()).toBe('save');
     });
   });
@@ -1007,7 +1046,8 @@ describe('ContributionRules', () => {
           contributionType: 'unlimited',
           accountId: 'roth401k-1',
         }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       // Roth 401k account
@@ -1038,7 +1078,8 @@ describe('ContributionRules', () => {
           contributionType: 'unlimited',
           accountId: 'roth-ira-1',
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxFreeAccount(createRothIraAccount({ id: 'roth-ira-1' }));
 
@@ -1116,7 +1157,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1133,7 +1175,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1153,7 +1196,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1175,7 +1219,8 @@ describe('ContributionRules', () => {
             accountId: 'roth403b-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth403bAccount());
 
@@ -1198,7 +1243,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1219,7 +1265,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1240,7 +1287,8 @@ describe('ContributionRules', () => {
             accountId: 'roth403b-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth403bAccount());
 
@@ -1260,7 +1308,8 @@ describe('ContributionRules', () => {
             contributionType: 'unlimited',
             accountId: 'roth-ira-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const iraAccount = new TaxFreeAccount(createRothIraAccount());
 
@@ -1284,7 +1333,8 @@ describe('ContributionRules', () => {
             enableMegaBackdoorRoth: true,
             employerMatch: 5000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1313,7 +1363,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: false,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1332,7 +1383,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1356,7 +1408,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1375,7 +1428,8 @@ describe('ContributionRules', () => {
             enableMegaBackdoorRoth: true,
             maxBalance: 50000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         // Balance is 40,000, maxBalance is 50,000 → only $10,000 room
         const account = new TaxFreeAccount(createRoth401kAccount({ balance: 40000 }));
@@ -1395,7 +1449,8 @@ describe('ContributionRules', () => {
             enableMegaBackdoorRoth: true,
             incomeId: 'income-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1429,7 +1484,8 @@ describe('ContributionRules', () => {
             accountId: '401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1447,7 +1503,8 @@ describe('ContributionRules', () => {
             accountId: 'roth-ira-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRothIraAccount());
 
@@ -1465,7 +1522,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -1486,7 +1544,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const nonMbrRule = new ContributionRule(
           createContributionRule({
@@ -1495,7 +1554,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-2',
             enableMegaBackdoorRoth: false,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const mbrAccount = new TaxFreeAccount(createRoth401kAccount({ id: 'roth401k-1' }));
         const nonMbrAccount = new TaxFreeAccount(createRoth401kAccount({ id: 'roth401k-2' }));
@@ -1516,7 +1576,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-2',
             enableMegaBackdoorRoth: false,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const nonMbrAccount = new TaxFreeAccount(createRoth401kAccount({ id: 'roth401k-2' }));
 
@@ -1543,7 +1604,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const nonMbrRule = new ContributionRule(
           createContributionRule({
@@ -1552,7 +1614,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-2',
             enableMegaBackdoorRoth: false,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const mbrAccount = new TaxFreeAccount(createRoth401kAccount({ id: 'roth401k-1' }));
         const nonMbrAccount = new TaxFreeAccount(createRoth401kAccount({ id: 'roth401k-2' }));
@@ -1590,7 +1653,8 @@ describe('ContributionRules', () => {
           maxBalance: 100000,
           employerMatch: 5000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount({ balance: 98500 }));
 
@@ -1625,11 +1689,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'rule-401k', contributionType: 'dollarAmount', dollarAmount: 20000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRoth401k = new ContributionRule(
         createContributionRule({ id: 'rule-roth401k', contributionType: 'unlimited', accountId: 'roth401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -1648,11 +1714,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const ruleIra = new ContributionRule(
         createContributionRule({ id: 'rule-ira', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: 'ira-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRothIra = new ContributionRule(
         createContributionRule({ id: 'rule-roth-ira', contributionType: 'unlimited', accountId: 'roth-ira-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const accountIra = new TaxDeferredAccount({ type: 'ira', id: 'ira-1', name: 'IRA', balance: 50000, percentBonds: 20 });
@@ -1671,15 +1739,18 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 10000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRoth401k = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 10000, accountId: 'roth401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule403b = new ContributionRule(
         createContributionRule({ id: 'r3', contributionType: 'unlimited', accountId: '403b-1', rank: 3 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -1712,7 +1783,8 @@ describe('ContributionRules', () => {
           rank: 1,
           employerMatch: 7000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleMbr = new ContributionRule(
         createContributionRule({
@@ -1722,7 +1794,8 @@ describe('ContributionRules', () => {
           rank: 2,
           enableMegaBackdoorRoth: true,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -1743,11 +1816,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'r-401k', contributionType: 'unlimited', accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleHsa = new ContributionRule(
         createContributionRule({ id: 'r-hsa', contributionType: 'unlimited', accountId: 'hsa-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -1774,11 +1849,13 @@ describe('ContributionRules', () => {
           rank: 1,
           enableMegaBackdoorRoth: true,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'r-401k', contributionType: 'unlimited', accountId: '401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const accountRoth401k = new TaxFreeAccount(createRoth401kAccount());
@@ -1808,11 +1885,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule1 = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 2000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule2 = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 3000, accountId: '401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1834,15 +1913,18 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule1 = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 3000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule2 = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: '401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule3 = new ContributionRule(
         createContributionRule({ id: 'r3', contributionType: 'dollarAmount', dollarAmount: 4000, accountId: '401k-1', rank: 3 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1865,7 +1947,8 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const ruleDollar = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rulePercent = new ContributionRule(
         createContributionRule({
@@ -1875,7 +1958,8 @@ describe('ContributionRules', () => {
           accountId: '401k-1',
           rank: 2,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1893,11 +1977,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const ruleDollar = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleUnlimited = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'unlimited', accountId: '401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1914,11 +2000,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule1 = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule2 = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 8000, accountId: '401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1942,7 +2030,8 @@ describe('ContributionRules', () => {
           rank: 1,
           employerMatch: 1500,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const rule2 = new ContributionRule(
         createContributionRule({
@@ -1953,7 +2042,8 @@ describe('ContributionRules', () => {
           rank: 2,
           employerMatch: 2000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const account = new TaxDeferredAccount(create401kAccount());
 
@@ -1986,11 +2076,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 15000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRoth401k = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 15000, accountId: 'roth401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -2010,7 +2102,8 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 20000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRoth401k = new ContributionRule(
         createContributionRule({
@@ -2020,7 +2113,8 @@ describe('ContributionRules', () => {
           accountId: 'roth401k-1',
           rank: 2,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -2039,11 +2133,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const rule401k = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'unlimited', accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRoth401k = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'unlimited', accountId: 'roth401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -2070,7 +2166,8 @@ describe('ContributionRules', () => {
           rank: 1,
           employerMatch: 10000,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleMbr = new ContributionRule(
         createContributionRule({
@@ -2080,7 +2177,8 @@ describe('ContributionRules', () => {
           rank: 2,
           enableMegaBackdoorRoth: true,
         }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
@@ -2101,11 +2199,13 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const ruleIra = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: 'ira-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const ruleRothIra = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 5000, accountId: 'roth-ira-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const accountIra = new TaxDeferredAccount({ type: 'ira', id: 'ira-1', name: 'IRA', balance: 50000, percentBonds: 20 });
@@ -2124,19 +2224,23 @@ describe('ContributionRules', () => {
       const tracker = new ContributionTracker();
       const r1 = new ContributionRule(
         createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 8000, accountId: '401k-1', rank: 1 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const r2 = new ContributionRule(
         createContributionRule({ id: 'r2', contributionType: 'dollarAmount', dollarAmount: 8000, accountId: 'roth401k-1', rank: 2 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const r3 = new ContributionRule(
         createContributionRule({ id: 'r3', contributionType: 'dollarAmount', dollarAmount: 8000, accountId: '403b-1', rank: 3 }),
-        tracker
+        tracker,
+        usHelpers
       );
       const r4 = new ContributionRule(
         createContributionRule({ id: 'r4', contributionType: 'dollarAmount', dollarAmount: 8000, accountId: 'roth403b-1', rank: 4 }),
-        tracker
+        tracker,
+        usHelpers
       );
 
       const a1 = new TaxDeferredAccount(create401kAccount());
@@ -2174,7 +2278,8 @@ describe('ContributionRules', () => {
         const tracker = new ContributionTracker();
         const rule = new ContributionRule(
           createContributionRule({ contributionType: 'unlimited', accountId: '401k-1', maxBalance: 101000 }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount({ balance: 100000 }));
 
@@ -2187,7 +2292,8 @@ describe('ContributionRules', () => {
         const tracker = new ContributionTracker();
         const rule = new ContributionRule(
           createContributionRule({ contributionType: 'unlimited', accountId: '401k-1', maxBalance: 200000 }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount({ balance: 100000 }));
 
@@ -2219,7 +2325,8 @@ describe('ContributionRules', () => {
             rank: 1,
             incomeId: 'salary',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const ruleRoth401k = new ContributionRule(
           createContributionRule({
@@ -2229,7 +2336,8 @@ describe('ContributionRules', () => {
             rank: 2,
             incomeId: 'bonus',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
 
         const account401k = new TaxDeferredAccount(create401kAccount());
@@ -2260,7 +2368,8 @@ describe('ContributionRules', () => {
             enableMegaBackdoorRoth: true,
             incomeId: 'salary',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
         const incomesData = createEmptyIncomesData({
@@ -2285,7 +2394,8 @@ describe('ContributionRules', () => {
             employerMatch: 5000,
             incomeId: 'salary',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount({ balance: 100000 }));
         const incomesData = createEmptyIncomesData({
@@ -2326,7 +2436,8 @@ describe('ContributionRules', () => {
             maxBalance: 55000,
             employerMatch: 3000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         // Balance 50k, maxBalance 55k → only $5k room
         const account = new TaxFreeAccount(createRoth401kAccount({ balance: 50000 }));
@@ -2347,7 +2458,8 @@ describe('ContributionRules', () => {
             accountId: '401k-1',
             employerMatch: 10000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -2366,7 +2478,8 @@ describe('ContributionRules', () => {
             accountId: '401k-1',
             employerMatch: 3000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -2393,7 +2506,8 @@ describe('ContributionRules', () => {
             accountId: 'roth403b-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth403bAccount());
 
@@ -2419,7 +2533,8 @@ describe('ContributionRules', () => {
     it('should reset per-rule YTD counters and shared tracker on year boundary', () => {
       const rules = new ContributionRules(
         [createContributionRule({ id: 'rule-1', contributionType: 'dollarAmount', dollarAmount: 2000, accountId: '401k-1', rank: 1 })],
-        { type: 'spend' }
+        { type: 'spend' },
+        usConfig
       );
 
       const rule = rules.getRules()[0];
@@ -2445,7 +2560,8 @@ describe('ContributionRules', () => {
           createContributionRule({ id: 'r1', contributionType: 'dollarAmount', dollarAmount: 20000, accountId: '401k-1', rank: 1 }),
           createContributionRule({ id: 'r2', contributionType: 'unlimited', accountId: 'roth401k-1', rank: 2 }),
         ],
-        { type: 'spend' }
+        { type: 'spend' },
+        usConfig
       );
       const [rule1, rule2] = rules.getRules().sort((a, b) => a.getRank() - b.getRank());
       const accountRoth401k = new TaxFreeAccount(createRoth401kAccount());
@@ -2474,7 +2590,8 @@ describe('ContributionRules', () => {
             employerMatch: 5000,
           }),
         ],
-        { type: 'spend' }
+        { type: 'spend' },
+        usConfig
       );
       const rule = rules.getRules()[0];
       const account = new TaxDeferredAccount(create401kAccount());
@@ -2507,7 +2624,8 @@ describe('ContributionRules', () => {
             accountId: '401k-1',
             incomeId: 'income-1',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxDeferredAccount(create401kAccount());
 
@@ -2528,7 +2646,8 @@ describe('ContributionRules', () => {
             accountId: 'savings-1',
             maxBalance: 10000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         // Balance is 12000, which exceeds maxBalance of 10000 (e.g. from market growth)
         const account = new SavingsAccount(createSavingsAccountInput({ balance: 12000 }));
@@ -2551,7 +2670,8 @@ describe('ContributionRules', () => {
             maxBalance: 15000,
             employerMatch: 5000,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         // Balance is 14000, maxBalance is 15000 → only $1000 room for employee contribution
         const account = new TaxDeferredAccount(create401kAccount({ balance: 14000 }));
@@ -2573,7 +2693,8 @@ describe('ContributionRules', () => {
           createContributionRule({
             accountId: 'my-custom-account-id',
           }),
-          tracker
+          tracker,
+          usHelpers
         );
 
         expect(rule.getAccountID()).toBe('my-custom-account-id');
@@ -2589,7 +2710,8 @@ describe('ContributionRules', () => {
             accountId: 'roth401k-1',
             enableMegaBackdoorRoth: true,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account = new TaxFreeAccount(createRoth401kAccount());
 
@@ -2664,7 +2786,8 @@ describe('ContributionRules', () => {
             incomeId: 'income-1',
             rank: 1,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const rule2 = new ContributionRule(
           createContributionRule({
@@ -2674,7 +2797,8 @@ describe('ContributionRules', () => {
             incomeId: 'income-1',
             rank: 2,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account401k = new TaxDeferredAccount(create401kAccount());
         const accountSavings = new SavingsAccount(createSavingsAccountInput());
@@ -2716,7 +2840,8 @@ describe('ContributionRules', () => {
             incomeId: 'income-1',
             rank: 1,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const rule2 = new ContributionRule(
           createContributionRule({
@@ -2726,7 +2851,8 @@ describe('ContributionRules', () => {
             incomeId: 'income-2',
             rank: 2,
           }),
-          tracker
+          tracker,
+          usHelpers
         );
         const account401k = new TaxDeferredAccount(create401kAccount());
         const accountSavings = new SavingsAccount(createSavingsAccountInput());
@@ -2790,7 +2916,8 @@ describe('ContributionRules', () => {
               rank: 2,
             }),
           ],
-          { type: 'spend' }
+          { type: 'spend' },
+          usConfig
         );
         const [rule401k, ruleHsa] = rules.getRules().sort((a, b) => a.getRank() - b.getRank());
         const account401k = new TaxDeferredAccount(create401kAccount());
@@ -2868,7 +2995,8 @@ describe('ContributionRules', () => {
               rank: 1,
             }),
           ],
-          { type: 'spend' }
+          { type: 'spend' },
+          usConfig
         );
         const rule = rules.getRules()[0];
         const account = new TaxDeferredAccount(create401kAccount());

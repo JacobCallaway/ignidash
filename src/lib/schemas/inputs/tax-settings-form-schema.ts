@@ -1,11 +1,18 @@
 import { z } from 'zod';
 
-const filingStatus = z.enum(['single', 'marriedFilingJointly', 'headOfHousehold']);
+import type { CountryConfig } from '@/lib/country/types';
+import { usConfig } from '@/lib/country/configs/us';
 
-export type FilingStatus = z.infer<typeof filingStatus>;
+export type FilingStatus = string;
 
-export const taxSettingsFormSchema = z.object({
-  filingStatus,
-});
+export interface TaxSettingsInputs {
+  filingStatus: string;
+}
 
-export type TaxSettingsInputs = z.infer<typeof taxSettingsFormSchema>;
+export function buildTaxSettingsFormSchema(config: CountryConfig) {
+  const ids = config.filingStatuses.map((s) => s.id) as [string, ...string[]];
+  return z.object({ filingStatus: z.enum(ids) });
+}
+
+// Static US schema kept for backward-compat with existing imports
+export const taxSettingsFormSchema = buildTaxSettingsFormSchema(usConfig);

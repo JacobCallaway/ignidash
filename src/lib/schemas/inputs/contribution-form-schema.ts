@@ -1,15 +1,16 @@
 /**
- * Contribution strategies and IRS limit helpers.
+ * Contribution strategies and country-configurable limit helpers.
  *
- * Defines the contribution form schema (dollarAmount / percentRemaining / unlimited)
- * and helper functions for IRS annual contribution limits, Section 415(c) limits,
- * shared-limit account groupings, and per-account-type feature support flags.
+ * The core schema shape (dollarAmount / percentRemaining / unlimited) is country-agnostic.
+ * buildContributionHelpers() returns limit/feature functions driven by the active country config.
  */
 
 import { z } from 'zod';
 import { currencyFieldForbidsZero, optionalCurrencyFieldForbidsZero, percentageField } from '@/lib/utils/zod-utils';
 
-import type { AccountInputs } from './account-form-schema';
+import type { CountryConfig } from '@/lib/country/types';
+import { getContributionLimit, getSection415cLimit, getSharedLimitAccountIds, getLimitGroupKey } from '@/lib/country';
+import { usConfig } from '@/lib/country/configs/us';
 
 export const baseContributionSchema = z.object({
   type: z.enum(['spend', 'save']),
@@ -54,108 +55,71 @@ export const contributionFormSchema = z
 
 export type ContributionInputs = z.infer<typeof contributionFormSchema>;
 
-// Maps each account type to all types sharing its contribution limit
-// (e.g., 401k contributions count against the 403b limit and vice versa)
-export const sharedLimitAccounts: Record<string, AccountInputs['type'][]> = {
-  '401k': ['401k', 'roth401k', '403b', 'roth403b'],
-  '403b': ['401k', 'roth401k', '403b', 'roth403b'],
-  roth401k: ['401k', 'roth401k', '403b', 'roth403b'],
-  roth403b: ['401k', 'roth401k', '403b', 'roth403b'],
-  ira: ['ira', 'rothIra'],
-  rothIra: ['ira', 'rothIra'],
-  hsa: ['hsa'],
-};
+/** Returns country-specific contribution limit helper functions. */
+export function buildContributionHelpers(config: CountryConfig) {
+  return {
+    getSharedLimitAccounts: (accountTypeId: string): string[] => getSharedLimitAccountIds(config, accountTypeId),
+    getLimitGroupKey: (accountTypeId: string): string => getLimitGroupKey(config, accountTypeId),
+    getAnnualContributionLimit: (accountTypeId: string, age: number): number => {
+      const acct = config.accountTypes.find((t) => t.id === accountTypeId);
+      if (!acct) return Infinity;
+      return getContributionLimit(acct, age);
+    },
+    getAnnualSection415cLimit: (accountTypeId: string, age: number): number => {
+      const acct = config.accountTypes.find((t) => t.id === accountTypeId);
+      if (!acct) return Infinity;
+      return getSection415cLimit(acct, age);
+    },
+    supportsMaxBalance: (accountTypeId: string): boolean => {
+      return config.accountTypes.find((t) => t.id === accountTypeId)?.taxCategory === 'cashSavings';
+    },
+    supportsIncomeAllocation: (accountTypeId: string): boolean => {
+      return config.accountTypes.find((t) => t.id === accountTypeId)?.taxCategory !== 'cashSavings';
+    },
+    supportsEmployerMatch: (accountTypeId: string): boolean => {
+      return config.accountTypes.find((t) => t.id === accountTypeId)?.supportsEmployerMatch ?? false;
+    },
+    supportsMegaBackdoorRoth: (accountTypeId: string): boolean => {
+      return config.accountTypes.find((t) => t.id === accountTypeId)?.supportsMegaBackdoor ?? false;
+    },
+  };
+}
 
-export const getAccountTypeLimitKey = (accountType: AccountInputs['type']): string => {
-  switch (accountType) {
-    case '401k':
-    case '403b':
-    case 'roth401k':
-    case 'roth403b':
-      return '401kCombined';
-    case 'ira':
-    case 'rothIra':
-      return 'iraCombined';
-    default:
-      return accountType;
-  }
-};
+// ─── Backward-compat US helpers (used by contribution-rules.ts and UI code) ──
 
+const _usHelpers = buildContributionHelpers(usConfig);
+
+/** @deprecated Use buildContributionHelpers(config).getSharedLimitAccounts instead */
+export const sharedLimitAccounts: Record<string, string[]> = Object.fromEntries(
+  usConfig.accountTypes.map((t) => [t.id, _usHelpers.getSharedLimitAccounts(t.id)])
+);
+
+/** @deprecated Use buildContributionHelpers(config).getLimitGroupKey instead */
+export const getAccountTypeLimitKey = (accountType: string): string => _usHelpers.getLimitGroupKey(accountType);
+
+/** @deprecated Use buildContributionHelpers(config).getAnnualContributionLimit instead */
 export const getAnnualContributionLimit = (limitKey: string, age: number): number => {
-  switch (limitKey) {
-    case '401kCombined':
-      if (age >= 60 && age <= 63) return 35750;
-      if (age >= 50) return 32500;
-      return 24500;
-    case 'iraCombined':
-      return age >= 50 ? 8600 : 7500;
-    case 'hsa':
-      return age >= 55 ? 5400 : 4400;
-    default:
-      return Infinity;
-  }
+  // limitKey is a shared group id (e.g. '401kCombined') — find an account with that group
+  const acct = usConfig.accountTypes.find((t) => (t.sharedLimitGroup ?? t.id) === limitKey);
+  if (!acct) return Infinity;
+  return getContributionLimit(acct, age);
 };
 
+/** @deprecated Use buildContributionHelpers(config).getAnnualSection415cLimit instead */
 export const getAnnualSection415cLimit = (age: number): number => {
-  if (age >= 60 && age <= 63) return 83250;
-  if (age >= 50) return 80000;
-  return 72000;
+  const acct = usConfig.accountTypes.find((t) => t.id === '401k');
+  if (!acct) return Infinity;
+  return getSection415cLimit(acct, age);
 };
 
-export const supportsMaxBalance = (type: AccountInputs['type']): boolean => {
-  switch (type) {
-    case 'savings':
-      return true;
-    case 'roth401k':
-    case 'roth403b':
-    case 'rothIra':
-    case '401k':
-    case '403b':
-    case 'ira':
-    case 'taxableBrokerage':
-    case 'hsa':
-      return false;
-  }
-};
+/** @deprecated Use buildContributionHelpers(config).supportsMaxBalance instead */
+export const supportsMaxBalance = (type: string): boolean => _usHelpers.supportsMaxBalance(type);
 
-export const supportsIncomeAllocation = (type: AccountInputs['type']): boolean => {
-  switch (type) {
-    case 'savings':
-      return false;
-    case 'roth401k':
-    case 'roth403b':
-    case 'rothIra':
-    case '401k':
-    case '403b':
-    case 'ira':
-    case 'taxableBrokerage':
-    case 'hsa':
-      return true;
-  }
-};
+/** @deprecated Use buildContributionHelpers(config).supportsIncomeAllocation instead */
+export const supportsIncomeAllocation = (type: string): boolean => _usHelpers.supportsIncomeAllocation(type);
 
-export const supportsEmployerMatch = (type: AccountInputs['type']): boolean => {
-  switch (type) {
-    case 'roth401k':
-    case 'roth403b':
-    case '401k':
-    case '403b':
-    case 'hsa':
-      return true;
-    case 'savings':
-    case 'rothIra':
-    case 'ira':
-    case 'taxableBrokerage':
-      return false;
-  }
-};
+/** @deprecated Use buildContributionHelpers(config).supportsEmployerMatch instead */
+export const supportsEmployerMatch = (type: string): boolean => _usHelpers.supportsEmployerMatch(type);
 
-export const supportsMegaBackdoorRoth = (type: AccountInputs['type']): boolean => {
-  switch (type) {
-    case 'roth401k':
-    case 'roth403b':
-      return true;
-    default:
-      return false;
-  }
-};
+/** @deprecated Use buildContributionHelpers(config).supportsMegaBackdoorRoth instead */
+export const supportsMegaBackdoorRoth = (type: string): boolean => _usHelpers.supportsMegaBackdoorRoth(type);

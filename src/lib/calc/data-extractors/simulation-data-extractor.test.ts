@@ -449,8 +449,7 @@ const createTaxDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: options.earlyWithdrawalPenalties ?? 0,
     },
     totalTaxesDue: 0,
@@ -635,8 +634,7 @@ const createCashFlowDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: options.totalTaxesAndPenalties,
@@ -988,8 +986,7 @@ const createNetCashFlowDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: options.totalTaxes ?? 0,
@@ -1647,8 +1644,7 @@ const createCashFlowInvariantDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: options.totalTaxes ?? 0,
