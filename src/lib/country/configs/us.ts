@@ -130,7 +130,7 @@ export const usConfig: CountryConfig = {
     },
     {
       id: 'taxableBrokerage',
-      label: 'Taxable Brokerage',
+      label: 'Taxable',
       taxCategory: 'taxable',
       hasPercentBonds: true,
       hasCostBasis: true,
@@ -148,13 +148,13 @@ export const usConfig: CountryConfig = {
       hasContributionBasis: false,
       // 2026 limits: base $24,500 | 50+ $32,500 | 60-63 $35,750
       annualContributionLimits: [
-        { minAge: 60, limit: 35750 },
+        { minAge: 60, maxAge: 63, limit: 35750 },
         { minAge: 50, limit: 32500 },
         { minAge: 0, limit: 24500 },
       ],
       sharedLimitGroup: '401kCombined',
       section415cLimits: [
-        { minAge: 60, limit: 83250 },
+        { minAge: 60, maxAge: 63, limit: 83250 },
         { minAge: 50, limit: 80000 },
         { minAge: 0, limit: 72000 },
       ],
@@ -172,13 +172,13 @@ export const usConfig: CountryConfig = {
       hasCostBasis: false,
       hasContributionBasis: true,
       annualContributionLimits: [
-        { minAge: 60, limit: 35750 },
+        { minAge: 60, maxAge: 63, limit: 35750 },
         { minAge: 50, limit: 32500 },
         { minAge: 0, limit: 24500 },
       ],
       sharedLimitGroup: '401kCombined',
       section415cLimits: [
-        { minAge: 60, limit: 83250 },
+        { minAge: 60, maxAge: 63, limit: 83250 },
         { minAge: 50, limit: 80000 },
         { minAge: 0, limit: 72000 },
       ],
@@ -196,13 +196,13 @@ export const usConfig: CountryConfig = {
       hasCostBasis: false,
       hasContributionBasis: false,
       annualContributionLimits: [
-        { minAge: 60, limit: 35750 },
+        { minAge: 60, maxAge: 63, limit: 35750 },
         { minAge: 50, limit: 32500 },
         { minAge: 0, limit: 24500 },
       ],
       sharedLimitGroup: '401kCombined',
       section415cLimits: [
-        { minAge: 60, limit: 83250 },
+        { minAge: 60, maxAge: 63, limit: 83250 },
         { minAge: 50, limit: 80000 },
         { minAge: 0, limit: 72000 },
       ],
@@ -220,13 +220,13 @@ export const usConfig: CountryConfig = {
       hasCostBasis: false,
       hasContributionBasis: true,
       annualContributionLimits: [
-        { minAge: 60, limit: 35750 },
+        { minAge: 60, maxAge: 63, limit: 35750 },
         { minAge: 50, limit: 32500 },
         { minAge: 0, limit: 24500 },
       ],
       sharedLimitGroup: '401kCombined',
       section415cLimits: [
-        { minAge: 60, limit: 83250 },
+        { minAge: 60, maxAge: 63, limit: 83250 },
         { minAge: 50, limit: 80000 },
         { minAge: 0, limit: 72000 },
       ],

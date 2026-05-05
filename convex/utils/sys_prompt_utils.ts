@@ -5,6 +5,70 @@ import { expenseTimeFrameForDisplay } from '../validators/expenses_validator';
 import type { KeyMetrics } from '../validators/key_metrics_validator';
 import type { SimulationResult } from '../validators/simulation_result_validator';
 
+interface LocalCountryData {
+  currencySymbol: string;
+  aiPromptContext: string;
+}
+
+const countryData: Record<string, LocalCountryData> = {
+  US: {
+    currencySymbol: '$',
+    aiPromptContext: `
+## US-Specific Account Types
+- 401(k) / 403(b): Tax-deferred employer-sponsored plans. Contributions reduce taxable income. RMDs required at age 73/75.
+- Roth 401(k) / Roth 403(b): After-tax contributions, tax-free growth. Employer match available.
+- IRA (Traditional): Individual Retirement Account, tax-deferred. RMDs required.
+- Roth IRA: After-tax, tax-free growth and withdrawals. No RMDs.
+- HSA: Health Savings Account — triple tax advantage (deductible, grows tax-free, tax-free for medical). Penalty-free non-medical at 65.
+- Taxable Brokerage: Subject to capital gains tax on realized gains and dividends.
+
+## US Tax Rules
+- Standard deduction applies before bracket calculation.
+- Long-term capital gains taxed at 0%, 15%, or 20% depending on income.
+- Net Investment Income Tax (NIIT): 3.8% surtax on investment income above $200k (single) / $250k (MFJ).
+- Social Security benefits are 0%, 50%, or up to 85% taxable based on provisional income.
+- FICA: 7.65% payroll tax on wage income.
+- Early withdrawal penalty: 10% for 401k/IRA before 59½; 20% for HSA before 65.
+
+## US Retirement Strategies
+- Tax diversification across taxable, tax-deferred, and tax-free accounts.
+- Roth conversion ladder: converting tax-deferred to Roth during low-income years.
+- Mega-backdoor Roth: after-tax 401k contributions up to Section 415(c) limit (~$72k).
+- Rule of 55: penalty-free 401k distributions if you leave employer at age 55+.
+- 0% capital gains zone: keeping income below LTCG threshold.
+`,
+  },
+  GB: {
+    currencySymbol: '£',
+    aiPromptContext: `
+## UK-Specific Account Types
+- Savings: Cash savings with no investment returns modelled.
+- GIA (General Investment Account): Taxable account — capital gains subject to CGT above the £3,000 annual exempt amount.
+- ISA (Individual Savings Account): Tax-free growth and withdrawals, £20,000 annual contribution limit. Accessible at any age.
+- SIPP (Self-Invested Personal Pension): Tax relief on contributions. 25% of withdrawals tax-free (PCLS). Accessible from age 57. Annual Allowance £60,000.
+
+## UK Tax Rules
+- Personal Allowance: £12,570 (no tax on income below this).
+- Income tax bands: 20% (basic, £12,571–£50,270), 40% (higher, £50,271–£125,140), 45% (additional, £125,140+).
+- Capital Gains Tax: £3,000 annual exempt amount. 10%/20% for non-residential assets.
+- National Insurance: Employee pays 8% on earnings £12,570–£50,270, then 2% above £50,270.
+- No equivalent to NIIT, Social Security benefit taxation, or RMDs.
+- SIPP contributions receive income tax relief at the marginal rate.
+
+## UK Retirement Strategies
+- ISA first: maximise ISA contributions (tax-free, no lock-in) before SIPP beyond employer match.
+- Pension access age is 57 from 2028 onwards.
+- Salary sacrifice into pension reduces income for NI as well as income tax.
+- Bed-and-ISA: sell GIA holdings and rebuy in ISA to shelter future gains (uses CGT exemption).
+- State Pension age is 67 for those born after April 1960.
+`,
+  },
+};
+
+function getLocalCountryData(country?: string | null): LocalCountryData {
+  return countryData[country ?? 'US'] ?? countryData['US'];
+}
+
 export const formatNumber = (num: number, fractionDigits: number = 2, prefix: string = ''): string => {
   const absNum = Math.abs(num);
   const sign = num < 0 ? '-' : '';
@@ -52,7 +116,7 @@ export const timePointLabel = (tp: { type: string; month?: number; year?: number
   }
 };
 
-export const keyMetricsForDisplay = (keyMetrics: KeyMetrics) => {
+export const keyMetricsForDisplay = (keyMetrics: KeyMetrics, currencySymbol = '$') => {
   const {
     success,
     retirementAge,
@@ -72,9 +136,9 @@ export const keyMetricsForDisplay = (keyMetrics: KeyMetrics) => {
     yearsToRetirement: (v: number | null) => (v !== null ? `${formatNumber(v, 0)}` : '∞'),
     bankruptcyAge: (v: number | null) => (v !== null ? `${formatNumber(v, 0)}` : '∞'),
     yearsToBankruptcy: (v: number | null) => (v !== null ? `${formatNumber(v, 0)}` : '∞'),
-    portfolioAtRetirement: (v: number | null) => (v !== null ? `${formatNumber(v, 2, '$')}` : 'N/A'),
-    lifetimeTaxesAndPenalties: (v: number) => `${formatNumber(v, 2, '$')}`,
-    finalPortfolio: (v: number) => `${formatNumber(v, 2, '$')}`,
+    portfolioAtRetirement: (v: number | null) => (v !== null ? `${formatNumber(v, 2, currencySymbol)}` : 'N/A'),
+    lifetimeTaxesAndPenalties: (v: number) => `${formatNumber(v, 2, currencySymbol)}`,
+    finalPortfolio: (v: number) => `${formatNumber(v, 2, currencySymbol)}`,
     progressToRetirement: (v: number | null) => (v !== null ? `${formatNumber(v * 100, 1)}%` : 'N/A'),
   };
 
@@ -91,7 +155,7 @@ export const keyMetricsForDisplay = (keyMetrics: KeyMetrics) => {
   };
 };
 
-const systemPrompt = (planData: string, keyMetrics: string, simulationData: string): string => `
+const systemPrompt = (planData: string, keyMetrics: string, simulationData: string, aiCountryContext: string): string => `
   You are an educational assistant for Ignidash, a retirement planning simulator.
 
   ## Role & Boundaries
@@ -154,6 +218,9 @@ const systemPrompt = (planData: string, keyMetrics: string, simulationData: stri
 
   If a user asks about unmodeled features, acknowledge the limitation directly—don't suggest workarounds within the app. You may explain these concepts educationally, but clarify they can't be simulated in Ignidash.
 
+  ## Country-Specific Context
+${aiCountryContext}
+
   ## User's Current Plan
 ${planData}
 
@@ -164,7 +231,13 @@ ${keyMetrics}
 ${simulationData}
 `;
 
-const insightsSystemPrompt = (planData: string, keyMetrics: string, simulationData: string, userPrompt: string | undefined): string => `
+const insightsSystemPrompt = (
+  planData: string,
+  keyMetrics: string,
+  simulationData: string,
+  userPrompt: string | undefined,
+  aiCountryContext: string
+): string => `
   You provide educational retirement plan overviews for Ignidash, a retirement planning simulator.
 
   ## Educational Purpose & Boundaries
@@ -328,6 +401,9 @@ const insightsSystemPrompt = (planData: string, keyMetrics: string, simulationDa
 
   Do not assume unlisted features exist. When discussing topics the simulator does not model, note that Ignidash cannot simulate them directly.
 
+  ## Country-Specific Context
+${aiCountryContext}
+
   ## User Data
 
   **User's Current Plan**
@@ -340,7 +416,8 @@ ${keyMetrics}
 ${simulationData}
 `;
 
-export const formatPlanData = (plan: Doc<'plans'>): string => {
+export const formatPlanData = (plan: Doc<'plans'>, currencySymbol = '$'): string => {
+  const c = currencySymbol;
   const lines: string[] = [];
 
   if (plan.timeline) {
@@ -359,7 +436,7 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
       `  - Incomes: ${plan.incomes
         .map(
           (i) =>
-            `${i.name} (${formatNumber(i.amount, 0, '$')} ${i.frequency}, ${incomeTimeFrameForDisplay(i.timeframe.start, i.timeframe.end)})`
+            `${i.name} (${formatNumber(i.amount, 0, c)} ${i.frequency}, ${incomeTimeFrameForDisplay(i.timeframe.start, i.timeframe.end)})`
         )
         .join('; ')}`
     );
@@ -372,7 +449,7 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
       `  - Expenses: ${plan.expenses
         .map(
           (e) =>
-            `${e.name} (${formatNumber(e.amount, 0, '$')} ${e.frequency}, ${expenseTimeFrameForDisplay(e.timeframe.start, e.timeframe.end)})`
+            `${e.name} (${formatNumber(e.amount, 0, c)} ${e.frequency}, ${expenseTimeFrameForDisplay(e.timeframe.start, e.timeframe.end)})`
         )
         .join('; ')}`
     );
@@ -386,7 +463,7 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
       `  - Debts: ${debts
         .map(
           (d) =>
-            `${d.name} (${formatNumber(d.balance, 0, '$')} bal, ${d.apr}% APR ${d.interestType}, ${formatNumber(d.monthlyPayment, 0, '$')}/mo, starts ${timePointLabel(d.startDate)})`
+            `${d.name} (${formatNumber(d.balance, 0, c)} bal, ${d.apr}% APR ${d.interestType}, ${formatNumber(d.monthlyPayment, 0, c)}/mo, starts ${timePointLabel(d.startDate)})`
         )
         .join('; ')}`
     );
@@ -402,10 +479,10 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
           const payment =
             a.paymentMethod.type === 'cash'
               ? 'cash'
-              : `loan: ${formatNumber(a.paymentMethod.loanBalance, 0, '$')} at ${a.paymentMethod.apr}%, ${formatNumber(a.paymentMethod.monthlyPayment, 0, '$')}/mo`;
+              : `loan: ${formatNumber(a.paymentMethod.loanBalance, 0, c)} at ${a.paymentMethod.apr}%, ${formatNumber(a.paymentMethod.monthlyPayment, 0, c)}/mo`;
           const sale = a.saleDate ? `, sells ${timePointLabel(a.saleDate)}` : '';
-          const mktVal = a.marketValue !== undefined ? `, mkt ${formatNumber(a.marketValue, 0, '$')}` : '';
-          return `${a.name} (${formatNumber(a.purchasePrice, 0, '$')}${mktVal}, ${a.appreciationRate}% appr, ${payment}, bought ${timePointLabel(a.purchaseDate)}${sale})`;
+          const mktVal = a.marketValue !== undefined ? `, mkt ${formatNumber(a.marketValue, 0, c)}` : '';
+          return `${a.name} (${formatNumber(a.purchasePrice, 0, c)}${mktVal}, ${a.appreciationRate}% appr, ${payment}, bought ${timePointLabel(a.purchaseDate)}${sale})`;
         })
         .join('; ')}`
     );
@@ -430,7 +507,7 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
       `  - Accounts: ${plan.accounts
         .map(
           (a) =>
-            `${a.name}: ${formatAccountType[a.type]} with ${formatNumber(a.balance, 0, '$')}${a.percentBonds ? `, ${a.percentBonds}% bonds` : ''}`
+            `${a.name}: ${formatAccountType[a.type] ?? a.type} with ${formatNumber(a.balance, 0, c)}${a.percentBonds ? `, ${a.percentBonds}% bonds` : ''}`
         )
         .join('; ')}`
     );
@@ -447,7 +524,7 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
         .map((r) => {
           const account = accountNameById[r.accountId] ?? r.accountId;
           const match = r.employerMatch ? ' (has employer match)' : '';
-          const cap = r.maxBalance ? ` (up to ${formatNumber(r.maxBalance, 0, '$')} balance)` : '';
+          const cap = r.maxBalance ? ` (up to ${formatNumber(r.maxBalance, 0, c)} balance)` : '';
           const mbr = r.enableMegaBackdoorRoth ? ' (mega-backdoor Roth)' : '';
           return `${account}${match}${cap}${mbr}`;
         })
@@ -471,7 +548,7 @@ export const formatPlanData = (plan: Doc<'plans'>): string => {
   return lines.join('\n');
 };
 
-const formatKeyMetrics = (keyMetrics: KeyMetrics | null): string => {
+const formatKeyMetrics = (keyMetrics: KeyMetrics | null, currencySymbol = '$'): string => {
   if (!keyMetrics) return 'No results available';
 
   const {
@@ -482,7 +559,7 @@ const formatKeyMetrics = (keyMetrics: KeyMetrics | null): string => {
     lifetimeTaxesAndPenaltiesForDisplay,
     finalPortfolioForDisplay,
     progressToRetirementForDisplay,
-  } = keyMetricsForDisplay(keyMetrics);
+  } = keyMetricsForDisplay(keyMetrics, currencySymbol);
 
   const lines = [
     `  - Success: ${successForDisplay}`,
@@ -538,14 +615,14 @@ export const buildTable = (title: string, data: SimulationResult['simulationResu
   return `## ${title}\n${header}\n${rows.join('\n')}`;
 };
 
-const formatSimulationData = (simulationResult: SimulationResult | null | undefined): string => {
+const formatSimulationData = (simulationResult: SimulationResult | null | undefined, currencySymbol = '$'): string => {
   if (!simulationResult) return 'No simulation data available';
 
   const { simulationResult: data, federalIncomeTaxBrackets, capitalGainsTaxBrackets, standardDeduction, niitThreshold } = simulationResult;
 
   if (!data.length) return 'No simulation data available';
 
-  const fmt = (n: number) => formatNumber(n, 0, '$');
+  const fmt = (n: number) => formatNumber(n, 0, currencySymbol);
   const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
   const col = (header: string, key: keyof D, format = fmt): ColumnDef => ({
     header,
@@ -686,7 +763,13 @@ const formatSimulationData = (simulationResult: SimulationResult | null | undefi
 };
 
 export const getSystemPrompt = (plan: Doc<'plans'>, keyMetrics: KeyMetrics | null, simulationResult?: SimulationResult | null): string => {
-  return systemPrompt(formatPlanData(plan), formatKeyMetrics(keyMetrics), formatSimulationData(simulationResult));
+  const { currencySymbol, aiPromptContext } = getLocalCountryData(plan.country);
+  return systemPrompt(
+    formatPlanData(plan, currencySymbol),
+    formatKeyMetrics(keyMetrics, currencySymbol),
+    formatSimulationData(simulationResult, currencySymbol),
+    aiPromptContext
+  );
 };
 
 export const getInsightsSystemPrompt = (
@@ -695,5 +778,12 @@ export const getInsightsSystemPrompt = (
   simulationResult: SimulationResult,
   userPrompt: string | undefined
 ): string => {
-  return insightsSystemPrompt(formatPlanData(plan), formatKeyMetrics(keyMetrics), formatSimulationData(simulationResult), userPrompt);
+  const { currencySymbol, aiPromptContext } = getLocalCountryData(plan.country);
+  return insightsSystemPrompt(
+    formatPlanData(plan, currencySymbol),
+    formatKeyMetrics(keyMetrics, currencySymbol),
+    formatSimulationData(simulationResult, currencySymbol),
+    userPrompt,
+    aiPromptContext
+  );
 };

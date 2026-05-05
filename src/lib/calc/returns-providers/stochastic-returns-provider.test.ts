@@ -11,6 +11,7 @@ describe('StochasticReturnsProvider', () => {
   };
 
   const defaultInputs: SimulatorInputs = {
+    country: 'US',
     timeline: null,
     incomes: {},
     expenses: {},

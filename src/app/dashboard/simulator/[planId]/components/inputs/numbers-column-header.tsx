@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanName, useMarketAssumptionsData, useTaxSettingsData, useTimelineData } from '@/hooks/use-convex-data';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
 import { useHasOpenedTaxSettings, useUpdateHasOpenedTaxSettings } from '@/lib/stores/simulator-store';
+import { useCountryConfig } from '@/hooks/use-country-config';
 
 const ExpectedReturnsDrawer = lazy(() => import('./drawers/expected-returns-drawer'));
 const TaxSettingsDrawer = lazy(() => import('./drawers/tax-settings-drawer'));
@@ -27,6 +28,7 @@ export default function NumbersColumnHeader() {
   const marketAssumptions = useMarketAssumptionsData();
   const taxSettings = useTaxSettingsData();
   const timeline = useTimelineData();
+  const countryConfig = useCountryConfig();
 
   const expectedReturnsTitleComponent = (
     <div className="flex items-center gap-2">
@@ -85,7 +87,7 @@ export default function NumbersColumnHeader() {
       </Drawer>
       <Drawer open={taxSettingsOpen} setOpen={setTaxSettingsOpen} title={taxSettingsTitleComponent}>
         <Suspense fallback={<PageLoading message="Loading Tax Settings" />}>
-          <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} />
+          <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} countryConfig={countryConfig} />
         </Suspense>
       </Drawer>
       <Drawer open={timelineOpen} setOpen={setTimelineOpen} title={timelineTitleComponent}>

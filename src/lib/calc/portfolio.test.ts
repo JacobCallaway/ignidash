@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type { GlidePathInputs } from '@/lib/schemas/inputs/glide-path-form-schema';
+import { usConfig } from '@/lib/country/configs/us';
 
 import { Portfolio, PortfolioProcessor } from './portfolio';
 import { ContributionRules } from './contribution-rules';
@@ -616,6 +617,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -646,6 +648,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -670,6 +673,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         { id: 'glide-path-1', enabled: false, endTimePoint: { type: 'customAge', age: 65 }, targetBondAllocation: 60 }
       );
 
@@ -700,6 +704,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -734,6 +739,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([createContributionRule({ accountId: '401k-1' })], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -775,6 +781,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 

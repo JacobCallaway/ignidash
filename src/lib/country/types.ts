@@ -22,6 +22,7 @@ export interface FilingStatusConfig {
 /** Age-tiered contribution limit — sorted highest minAge first */
 export interface ContributionLimitTier {
   minAge: number;
+  maxAge?: number;
   limit: number;
 }
 

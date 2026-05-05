@@ -9,6 +9,11 @@ const registry: Record<string, CountryConfig> = {
   GB: ukConfig,
 };
 
+export const AVAILABLE_COUNTRIES: { code: string; name: string }[] = Object.values(registry).map((c) => ({
+  code: c.code,
+  name: c.name,
+}));
+
 export function getCountryConfig(code?: string | null): CountryConfig {
   return registry[code ?? 'US'] ?? registry['US'];
 }
@@ -22,7 +27,7 @@ export function getContributionLimit(config: AccountTypeConfig, age: number): nu
   const tiers = config.annualContributionLimits;
   if (!tiers || tiers.length === 0) return Infinity;
   for (const tier of tiers) {
-    if (age >= tier.minAge) return tier.limit;
+    if (age >= tier.minAge && (tier.maxAge === undefined || age <= tier.maxAge)) return tier.limit;
   }
   return tiers[tiers.length - 1].limit;
 }
@@ -32,7 +37,7 @@ export function getSection415cLimit(config: AccountTypeConfig, age: number): num
   const tiers = config.section415cLimits;
   if (!tiers || tiers.length === 0) return Infinity;
   for (const tier of tiers) {
-    if (age >= tier.minAge) return tier.limit;
+    if (age >= tier.minAge && (tier.maxAge === undefined || age <= tier.maxAge)) return tier.limit;
   }
   return tiers[tiers.length - 1].limit;
 }

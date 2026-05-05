@@ -27,6 +27,7 @@ import {
 } from '@/lib/stores/simulator-store';
 import { useMarketAssumptionsData, useTaxSettingsData, useTimelineData, useSimulationSettingsData } from '@/hooks/use-convex-data';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
+import { useCountryConfig } from '@/hooks/use-country-config';
 
 const UserFeedbackDrawer = lazy(() => import('@/components/layout/user-feedback-drawer'));
 const ExpectedReturnsDrawer = lazy(() => import('./inputs/drawers/expected-returns-drawer'));
@@ -61,6 +62,7 @@ export default function SectionSelector({ activeSection, setActiveSection }: Sec
   const marketAssumptions = useMarketAssumptionsData();
   const taxSettings = useTaxSettingsData();
   const timeline = useTimelineData();
+  const countryConfig = useCountryConfig();
   const simulationSettings = useSimulationSettingsData();
 
   const { icon, label, handleClick, isDisabled } = useRegenSimulation();
@@ -204,7 +206,7 @@ export default function SectionSelector({ activeSection, setActiveSection }: Sec
       </Drawer>
       <Drawer open={taxSettingsOpen} setOpen={setTaxSettingsOpen} title={taxSettingsTitleComponent}>
         <Suspense fallback={<PageLoading message="Loading Tax Settings" />}>
-          <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} />
+          <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} countryConfig={countryConfig} />
         </Suspense>
       </Drawer>
       <Drawer open={timelineOpen} setOpen={setTimelineOpen} title={timelineTitleComponent}>

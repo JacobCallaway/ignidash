@@ -2,40 +2,57 @@
  * Currency display formatting via Intl.NumberFormat.
  *
  * Provides full-precision and compact formatters for currency values.
- * All formatters use the locale and symbol from CURRENCY_CONFIG.
+ * Formatters are lazy-created and invalidated on setCurrencyConfig().
  */
 
-export const CURRENCY_CONFIG = {
-  currency: 'USD',
-  locale: 'en-US',
-  symbol: '$',
-} as const;
+import type { CountryConfig } from '@/lib/country/types';
 
-const currencyFormatter = new Intl.NumberFormat(CURRENCY_CONFIG.locale, {
-  style: 'currency',
-  currency: CURRENCY_CONFIG.currency,
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
+let currencyConfig: CountryConfig['currency'] = { code: 'USD', locale: 'en-US', symbol: '$' };
+let _formatter: Intl.NumberFormat | null = null;
+let _formatterWithCents: Intl.NumberFormat | null = null;
 
-const currencyFormatterWithCents = new Intl.NumberFormat(CURRENCY_CONFIG.locale, {
-  style: 'currency',
-  currency: CURRENCY_CONFIG.currency,
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+export function setCurrencyConfig(config: CountryConfig['currency']): void {
+  currencyConfig = config;
+  _formatter = null;
+  _formatterWithCents = null;
+  percentageFormatters.clear();
+}
+
+function getFormatter(): Intl.NumberFormat {
+  if (!_formatter) {
+    _formatter = new Intl.NumberFormat(currencyConfig.locale, {
+      style: 'currency',
+      currency: currencyConfig.code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  }
+  return _formatter;
+}
+
+function getFormatterWithCents(): Intl.NumberFormat {
+  if (!_formatterWithCents) {
+    _formatterWithCents = new Intl.NumberFormat(currencyConfig.locale, {
+      style: 'currency',
+      currency: currencyConfig.code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  return _formatterWithCents;
+}
 
 export function formatCurrency(amount: number, options?: { cents?: boolean }): string {
   if (options?.cents) {
-    return currencyFormatterWithCents.format(amount);
+    return getFormatterWithCents().format(amount);
   }
-  return currencyFormatter.format(amount);
+  return getFormatter().format(amount);
 }
 
 export function formatCompactCurrency(amount: number, fractionDigits: number = 2): string {
   const absNum = Math.abs(amount);
   const sign = amount < 0 ? '-' : '';
-  const symbol = CURRENCY_CONFIG.symbol;
+  const symbol = currencyConfig.symbol;
 
   if (absNum >= 1000000000) return sign + symbol + (absNum / 1000000000).toFixed(2) + 'B';
   if (absNum >= 1000000) return sign + symbol + (absNum / 1000000).toFixed(2) + 'M';
@@ -45,11 +62,11 @@ export function formatCompactCurrency(amount: number, fractionDigits: number = 2
 }
 
 export function getCurrencySymbol(): string {
-  return CURRENCY_CONFIG.symbol;
+  return currencyConfig.symbol;
 }
 
 export function formatCurrencyPlaceholder(amount: number): string {
-  return currencyFormatter.format(amount);
+  return getFormatter().format(amount);
 }
 
 const percentageFormatters = new Map<number, Intl.NumberFormat>();
@@ -57,7 +74,7 @@ const percentageFormatters = new Map<number, Intl.NumberFormat>();
 function getPercentageFormatter(fractionDigits: number): Intl.NumberFormat {
   let formatter = percentageFormatters.get(fractionDigits);
   if (!formatter) {
-    formatter = new Intl.NumberFormat(CURRENCY_CONFIG.locale, {
+    formatter = new Intl.NumberFormat(currencyConfig.locale, {
       style: 'percent',
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,

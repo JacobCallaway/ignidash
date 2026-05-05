@@ -86,7 +86,8 @@ export function isRothAccount(type: string, config: CountryConfig = usConfig): b
 }
 
 export function isTraditionalAccount(type: string, config: CountryConfig = usConfig): boolean {
-  return config.accountTypes.find((t) => t.id === type)?.taxCategory === 'taxDeferred';
+  const acct = config.accountTypes.find((t) => t.id === type);
+  return acct?.taxCategory === 'taxDeferred' && (acct.hasRmd ?? false);
 }
 
 export function isInvestmentAccount(type: string, config: CountryConfig = usConfig): boolean {
