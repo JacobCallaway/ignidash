@@ -969,6 +969,7 @@ export class Portfolio {
         name: account.getAccountName(),
         id: account.getAccountID(),
         type: account.getAccountType(),
+        taxCategory: account.taxCategory,
         returnAmounts: returnAmountsFromThisAccount,
         cumulativeReturnAmounts: cumulativeReturnAmountsFromThisAccount,
       };

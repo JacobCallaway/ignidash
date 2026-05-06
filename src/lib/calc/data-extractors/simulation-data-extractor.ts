@@ -342,22 +342,17 @@ export class SimulationDataExtractor {
     let taxFreeContributions = 0;
 
     for (const account of Object.values(portfolioData.perAccountData)) {
-      switch (account.type) {
-        case 'savings':
+      switch (account.taxCategory) {
+        case 'cashSavings':
           cashSavingsContributions += sumFlows(account.contributions);
           break;
-        case 'taxableBrokerage':
+        case 'taxable':
           taxableContributions += sumFlows(account.contributions);
           break;
-        case '401k':
-        case '403b':
-        case 'ira':
-        case 'hsa':
+        case 'taxDeferred':
           taxDeferredContributions += sumFlows(account.contributions);
           break;
-        case 'roth401k':
-        case 'roth403b':
-        case 'rothIra':
+        case 'taxFree':
           taxFreeContributions += sumFlows(account.contributions);
           break;
       }
@@ -372,7 +367,7 @@ export class SimulationDataExtractor {
    * @param age - Current age of the user
    * @returns Withdrawal amounts grouped by tax treatment
    */
-  static getWithdrawalsByTaxCategory(dp: SimulationDataPoint, age: number): WithdrawalsByTaxCategory {
+  static getWithdrawalsByTaxCategory(dp: SimulationDataPoint, _age: number): WithdrawalsByTaxCategory {
     const portfolioData = dp.portfolio;
 
     let cashSavingsWithdrawals = 0;
@@ -381,24 +376,17 @@ export class SimulationDataExtractor {
     let taxFreeWithdrawals = 0;
 
     for (const account of Object.values(portfolioData.perAccountData)) {
-      switch (account.type) {
-        case 'savings':
+      switch (account.taxCategory) {
+        case 'cashSavings':
           cashSavingsWithdrawals += sumFlows(account.withdrawals);
           break;
-        case 'taxableBrokerage':
+        case 'taxable':
           taxableWithdrawals += sumFlows(account.withdrawals);
           break;
-        case '401k':
-        case '403b':
-        case 'ira':
+        case 'taxDeferred':
           taxDeferredWithdrawals += sumFlows(account.withdrawals);
           break;
-        case 'hsa':
-          taxDeferredWithdrawals += sumFlows(account.withdrawals);
-          break;
-        case 'roth401k':
-        case 'roth403b':
-        case 'rothIra':
+        case 'taxFree':
           taxFreeWithdrawals += sumFlows(account.withdrawals);
           break;
       }
@@ -413,7 +401,7 @@ export class SimulationDataExtractor {
    * @param age - Current age of the user
    * @returns Total early withdrawal amount
    */
-  static getEarlyWithdrawals(dp: SimulationDataPoint, age: number): number {
+  static getEarlyWithdrawals(dp: SimulationDataPoint, _age: number): number {
     const taxesData = dp.taxes;
     if (!taxesData) return 0;
 
@@ -434,22 +422,17 @@ export class SimulationDataExtractor {
     let taxFreeValue = 0;
 
     for (const account of Object.values(portfolioData.perAccountData)) {
-      switch (account.type) {
-        case 'savings':
+      switch (account.taxCategory) {
+        case 'cashSavings':
           cashSavings += account.balance;
           break;
-        case 'taxableBrokerage':
+        case 'taxable':
           taxableValue += account.balance;
           break;
-        case '401k':
-        case '403b':
-        case 'ira':
-        case 'hsa':
+        case 'taxDeferred':
           taxDeferredValue += account.balance;
           break;
-        case 'roth401k':
-        case 'roth403b':
-        case 'rothIra':
+        case 'taxFree':
           taxFreeValue += account.balance;
           break;
       }
@@ -475,22 +458,17 @@ export class SimulationDataExtractor {
       const { stocks, bonds, cash } = account.returnAmounts;
       const totalGains = stocks + bonds + cash;
 
-      switch (account.type) {
-        case 'savings':
+      switch (account.taxCategory) {
+        case 'cashSavings':
           cashSavingsGains += totalGains;
           break;
-        case 'taxableBrokerage':
+        case 'taxable':
           taxableGains += totalGains;
           break;
-        case '401k':
-        case '403b':
-        case 'ira':
-        case 'hsa':
+        case 'taxDeferred':
           taxDeferredGains += totalGains;
           break;
-        case 'roth401k':
-        case 'roth403b':
-        case 'rothIra':
+        case 'taxFree':
           taxFreeGains += totalGains;
           break;
       }

@@ -36,6 +36,7 @@ export interface AccountData {
   name: string;
   id: string;
   type: AccountInputs['type'];
+  taxCategory: TaxCategory;
   assetAllocation: AssetAllocation;
 }
 
@@ -172,6 +173,7 @@ export class SavingsAccount extends Account {
       name: this.name,
       id: this.id,
       type: this.type,
+      taxCategory: this.taxCategory,
       assetAllocation,
     };
   }
@@ -269,6 +271,7 @@ export abstract class InvestmentAccount extends Account {
       name: this.name,
       id: this.id,
       type: this.type,
+      taxCategory: this.taxCategory,
       assetAllocation,
     };
   }

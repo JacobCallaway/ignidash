@@ -6,6 +6,7 @@
  */
 
 import type { AccountInputs } from '@/lib/schemas/inputs/account-form-schema';
+import { taxCategoryFromAccountType } from '@/lib/schemas/inputs/account-form-schema';
 import type { IncomeInputs } from '@/lib/schemas/inputs/income-form-schema';
 import type { ExpenseInputs } from '@/lib/schemas/inputs/expense-form-schema';
 import type { ContributionInputs } from '@/lib/schemas/inputs/contribution-form-schema';
@@ -480,6 +481,7 @@ export const createAccountData = (
   cumulativeRealizedGains: overrides.cumulativeRealizedGains ?? 0,
   cumulativeEarningsWithdrawn: overrides.cumulativeEarningsWithdrawn ?? 0,
   cumulativeRmds: overrides.cumulativeRmds ?? 0,
+  taxCategory: overrides.taxCategory ?? taxCategoryFromAccountType(overrides.type),
   assetAllocation: overrides.assetAllocation ?? { stocks: 0.8, bonds: 0.2, cash: 0 },
   contributions: overrides.contributions ?? overrides.contributions ?? { stocks: 0, bonds: 0, cash: 0 },
   employerMatch: overrides.employerMatch ?? overrides.employerMatch ?? 0,
