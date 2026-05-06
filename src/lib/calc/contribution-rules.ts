@@ -126,7 +126,7 @@ export class ContributionRule {
     const desiredContribution = this.calculateDesiredContribution(remainingToContribute);
 
     const contributionAmount = Math.min(desiredContribution, maxContribution);
-    const employerMatchAmount = this.calculateEmployerMatch(contributionAmount);
+    const employerMatchAmount = this.calculateEmployerMatch(contributionAmount, incomesData);
 
     return { contributionAmount, employerMatchAmount };
   }
@@ -157,11 +157,19 @@ export class ContributionRule {
     return Math.max(0, (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) - this.tracker.getEmployeeByIncome(incomeId));
   }
 
-  private calculateEmployerMatch(contributionAmount: number): number {
+  private calculateEmployerMatch(contributionAmount: number, incomesData: IncomesData | null): number {
+    // Percent-of-income match: employer contributes up to X% of the linked income per year
+    if (this.contributionInput.employerMatchPercent !== undefined) {
+      const incomeId = this.contributionInput.incomeId;
+      const monthlyIncome = incomeId ? (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) : (incomesData?.totalIncome ?? 0);
+      const maxAnnualMatch = (this.contributionInput.employerMatchPercent / 100) * monthlyIncome * 12;
+      const remainingToMax = Math.max(0, maxAnnualMatch - this.ytdEmployerMatch);
+      return Math.min(contributionAmount, remainingToMax);
+    }
+
+    // Fixed dollar match: employer matches dollar-for-dollar up to the annual cap
     if (!this.contributionInput.employerMatch) return 0;
-
     const remainingToMaxEmployerMatch = Math.max(0, this.contributionInput.employerMatch - this.ytdEmployerMatch);
-
     return Math.min(contributionAmount, remainingToMaxEmployerMatch);
   }
 

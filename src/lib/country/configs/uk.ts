@@ -144,7 +144,6 @@ export const ukConfig: CountryConfig = {
   rmd: undefined,
 
   //todo: add stamp duty tax for house purchases (could be modelled as a one-time capital gains tax triggered by physical asset purchase)
-  //todo: add emplyer SIPP match rules (e.g. 3% of salary up to 9% of salary total contributions)
   //todo: add tapered annual allowance for high earners (e.g. reduce £60k limit by £1 for every £2 of income above £240k)
   //todo:ensure sipp contributions don't py NI or income tax, and that sipp withdrawals do (except for 25% tax-free lump sum)
   //todo: support automatic tranferring of GIA assets into ISA (i.e. bed-and-ISA strategy)

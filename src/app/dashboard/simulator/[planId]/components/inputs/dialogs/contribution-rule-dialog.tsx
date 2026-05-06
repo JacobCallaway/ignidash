@@ -97,6 +97,10 @@ export default function ContributionRuleDialog({
   const contributionType = useWatch({ control, name: 'contributionType' });
   const accountId = useWatch({ control, name: 'accountId' });
   const enableMegaBackdoorRoth = useWatch({ control, name: 'enableMegaBackdoorRoth' });
+  // 'percent' mode when employerMatchPercent is set (even if 0); 'fixed' otherwise
+  const [employerMatchMode, setEmployerMatchMode] = useState<'fixed' | 'percent'>(
+    selectedContributionRule?.employerMatchPercent !== undefined ? 'percent' : 'fixed'
+  );
 
   const getContributionTypeColSpan = () => {
     if (contributionType === 'dollarAmount' || contributionType === 'percentRemaining') return 'col-span-1';
@@ -137,12 +141,17 @@ export default function ContributionRuleDialog({
 
     if (!(selectedAccount && supportsEmployerMatch(selectedAccount.type))) {
       unregister('employerMatch');
+      unregister('employerMatchPercent');
+    } else if (employerMatchMode === 'percent') {
+      unregister('employerMatch');
+    } else {
+      unregister('employerMatchPercent');
     }
 
     if (!(selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type))) {
       unregister('enableMegaBackdoorRoth');
     }
-  }, [contributionType, unregister, selectedAccount]);
+  }, [contributionType, unregister, selectedAccount, employerMatchMode]);
 
   const { error: dollarAmountError } = getFieldState('dollarAmount');
   const { error: percentRemainingError } = getFieldState('percentRemaining');
@@ -266,22 +275,55 @@ export default function ContributionRuleDialog({
                 </Field>
               )}
               {selectedAccount && supportsEmployerMatch(selectedAccount.type) && (
-                <Field>
-                  <Label htmlFor="employerMatch" className="flex w-full items-center justify-between">
-                    <span className="whitespace-nowrap">Employer Match</span>
-                    <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
-                  </Label>
-                  <NumberInput
-                    name="employerMatch"
-                    control={control}
-                    id="employerMatch"
-                    inputMode="decimal"
-                    placeholder={formatCurrencyPlaceholder(7000)}
-                    prefix={getCurrencySymbol()}
-                  />
-                  {errors.employerMatch && <ErrorMessage>{errors.employerMatch?.message}</ErrorMessage>}
-                  <Description>Employer will match your contributions dollar-for-dollar up to this amount.</Description>
-                </Field>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <Field>
+                    <Label htmlFor="employerMatchMode" className="flex w-full items-center justify-between">
+                      <span className="whitespace-nowrap">Employer Match</span>
+                      <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
+                    </Label>
+                    <Select
+                      id="employerMatchMode"
+                      value={employerMatchMode}
+                      onChange={(e) => setEmployerMatchMode(e.target.value as 'fixed' | 'percent')}
+                    >
+                      <option value="fixed">Fixed Amount</option>
+                      <option value="percent">% of Income</option>
+                    </Select>
+                  </Field>
+                  {employerMatchMode === 'fixed' && (
+                    <Field>
+                      <Label htmlFor="employerMatch">&nbsp;</Label>
+                      <NumberInput
+                        name="employerMatch"
+                        control={control}
+                        id="employerMatch"
+                        inputMode="decimal"
+                        placeholder={formatCurrencyPlaceholder(7000)}
+                        prefix={getCurrencySymbol()}
+                      />
+                      {errors.employerMatch && <ErrorMessage>{errors.employerMatch?.message}</ErrorMessage>}
+                    </Field>
+                  )}
+                  {employerMatchMode === 'percent' && (
+                    <Field>
+                      <Label htmlFor="employerMatchPercent">&nbsp;</Label>
+                      <NumberInput
+                        name="employerMatchPercent"
+                        control={control}
+                        id="employerMatchPercent"
+                        inputMode="decimal"
+                        placeholder="3%"
+                        suffix="%"
+                      />
+                      {errors.employerMatchPercent && <ErrorMessage>{errors.employerMatchPercent?.message}</ErrorMessage>}
+                    </Field>
+                  )}
+                  <Description className="col-span-2">
+                    {employerMatchMode === 'percent'
+                      ? 'Employer matches your contributions up to this percentage of the linked income each year.'
+                      : 'Employer will match your contributions dollar-for-dollar up to this annual amount.'}
+                  </Description>
+                </div>
               )}
               {selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type) && (
                 <>

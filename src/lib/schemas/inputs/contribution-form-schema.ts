@@ -6,7 +6,12 @@
  */
 
 import { z } from 'zod';
-import { currencyFieldForbidsZero, optionalCurrencyFieldForbidsZero, percentageField } from '@/lib/utils/zod-utils';
+import {
+  currencyFieldForbidsZero,
+  optionalCurrencyFieldForbidsZero,
+  optionalPercentageField,
+  percentageField,
+} from '@/lib/utils/zod-utils';
 
 import type { CountryConfig } from '@/lib/country/types';
 import { getContributionLimit, getSection415cLimit, getSharedLimitAccountIds, getLimitGroupKey } from '@/lib/country';
@@ -26,6 +31,7 @@ const sharedContributionSchema = z.object({
   incomeId: z.string().optional(),
   disabled: z.boolean().optional(),
   employerMatch: optionalCurrencyFieldForbidsZero('Employer match must be greater than zero'),
+  employerMatchPercent: optionalPercentageField(0, 100, 'Employer match percentage'),
   enableMegaBackdoorRoth: z.boolean().optional(),
 });
 
