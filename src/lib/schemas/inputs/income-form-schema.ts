@@ -18,6 +18,7 @@ export type IncomeType = string;
 export const incomeTaxSchema = z.object({
   incomeType: z.string(),
   withholding: optionalPercentageField(0, 50, 'Withholding'),
+  autoWithholding: z.boolean().optional(),
 });
 
 export const incomeFormSchema = z
@@ -59,6 +60,10 @@ export type IncomeInputs = z.infer<typeof incomeFormSchema>;
 
 export function supportsWithholding(incomeType: string, config: CountryConfig = usConfig): boolean {
   return config.incomeTypes.find((t) => t.id === incomeType)?.hasWithholding ?? false;
+}
+
+export function supportsAutoWithholding(incomeType: string, config: CountryConfig = usConfig): boolean {
+  return config.incomeTypes.find((t) => t.id === incomeType)?.supportsAutoWithholding ?? false;
 }
 
 export function defaultWithholding(incomeType: string, config: CountryConfig = usConfig): number | undefined {

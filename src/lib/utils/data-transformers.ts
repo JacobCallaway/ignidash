@@ -140,7 +140,7 @@ export function incomeFromConvex(income: Doc<'plans'>['incomes'][number]): Incom
     frequency: income.frequency,
     timeframe: { start: income.timeframe.start, end: income.timeframe.end },
     growth: income.growth,
-    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding },
+    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding, autoWithholding: income.taxes.autoWithholding },
     disabled: income.disabled ?? false,
   };
 }
@@ -308,7 +308,7 @@ export function incomeToConvex(income: IncomeInputs): Doc<'plans'>['incomes'][nu
     frequency: income.frequency,
     timeframe: { start: income.timeframe.start, end: income.timeframe.end },
     growth: income.growth,
-    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding },
+    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding, autoWithholding: income.taxes.autoWithholding },
     disabled: income.disabled ?? false,
   };
 }

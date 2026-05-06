@@ -38,6 +38,7 @@ export const incomeValidator = v.object({
   taxes: v.object({
     incomeType: v.string(),
     withholding: v.optional(v.number()),
+    autoWithholding: v.optional(v.boolean()),
   }),
   disabled: v.boolean(),
 });

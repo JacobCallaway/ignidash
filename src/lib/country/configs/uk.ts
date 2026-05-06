@@ -10,7 +10,7 @@ export const ukConfig: CountryConfig = {
   // UK 2025/26 Income Tax
   incomeTax: {
     individual: {
-      standardDeduction: 12570, // Personal Allowance
+      standardDeduction: 0, // Personal Allowance is accounted for in first tax bracket
       brackets: [
         { min: 0, max: 12570, rate: 0.0 },
         { min: 12570, max: 50270, rate: 0.2 },
@@ -112,6 +112,7 @@ export const ukConfig: CountryConfig = {
       hasWithholding: true,
       hasPayrollTax: true,
       isSocialSecurityLike: false,
+      supportsAutoWithholding: true,
     },
     {
       id: 'statePension',
@@ -141,6 +142,13 @@ export const ukConfig: CountryConfig = {
 
   // No RMDs in UK
   rmd: undefined,
+
+  //todo: add stamp duty tax for house purchases (could be modelled as a one-time capital gains tax triggered by physical asset purchase)
+  //todo: add emplyer SIPP match rules (e.g. 3% of salary up to 9% of salary total contributions)
+  //todo: add tapered annual allowance for high earners (e.g. reduce £60k limit by £1 for every £2 of income above £240k)
+  //todo:ensure sipp contributions don't py NI or income tax, and that sipp withdrawals do (except for 25% tax-free lump sum)
+  //todo: support automatic tranferring of GIA assets into ISA (i.e. bed-and-ISA strategy)
+  //todo: add state pension modelling (e.g. based on National Insurance contribution history, with options to defer for higher payments later)
 
   aiPromptContext: `
 ## UK-Specific Account Types

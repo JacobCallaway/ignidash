@@ -140,6 +140,10 @@ export class FinancialSimulationEngine {
       if (simulationState.time.age >= simulationContext.rmdAge && simulationState.time.month % 12 === 1)
         portfolioProcessor.processRequiredMinimumDistributions();
 
+      // Update automatic withholding rates at the start of each year based on expected income and tax brackets
+      if (simulationState.time.month % 12 === 1)
+        incomes.updateAutoWithholdingRates(simulationState, this.inputs.taxSettings.filingStatus, countryConfig);
+
       // Process one month of simulation
       const { inflationRate: monthlyInflationRate } = returnsProcessor.process();
       const incomesData = incomesProcessor.process();

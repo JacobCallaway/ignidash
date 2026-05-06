@@ -67,6 +67,8 @@ export interface IncomeTypeConfig {
   isTaxFree?: boolean;
   /** If set, withholding must be one of these values */
   allowedWithholdingRates?: number[];
+  /** If true, this income type supports automatic withholding computed from tax brackets each year */
+  supportsAutoWithholding?: boolean;
 }
 
 export interface PayrollTaxConfig {

@@ -8,7 +8,7 @@
 
 import type { IncomeInputs, IncomeType } from '@/lib/schemas/inputs/income-form-schema';
 import type { TimePoint } from '@/lib/schemas/inputs/income-expenses-shared-schemas';
-import type { CountryConfig, IncomeTypeConfig } from '@/lib/country/types';
+import type { CountryConfig, IncomeTypeConfig, TaxBracket } from '@/lib/country/types';
 import { computePayrollTax } from '@/lib/country';
 import { usConfig } from '@/lib/country/configs/us';
 
@@ -122,6 +122,35 @@ export class Incomes {
   getActiveIncomesByTimeFrame(simulationState: SimulationState): Income[] {
     return this.incomes.filter((income) => income.getIsActiveByTimeFrame(simulationState));
   }
+
+  /**
+   * Recomputes automatic withholding rates for the current year.
+   * Called at the start of each simulation year so tax is withheld monthly rather than settled as a lump sum.
+   * Rate is derived from the expected total annual income and the country's income tax brackets.
+   */
+  updateAutoWithholdingRates(simulationState: SimulationState, filingStatus: string, countryConfig: CountryConfig): void {
+    const activeIncomes = this.getActiveIncomesByTimeFrame(simulationState);
+    const autoIncomes = activeIncomes.filter((inc) => inc.isAutoWithholding());
+    if (autoIncomes.length === 0) return;
+
+    const totalExpectedAnnualIncome = activeIncomes.reduce((sum, inc) => sum + inc.getExpectedAnnualAmount(), 0);
+
+    const incomeTaxConfig = countryConfig.incomeTax[filingStatus];
+    const brackets: TaxBracket[] = incomeTaxConfig?.brackets ?? [];
+    const standardDeduction = incomeTaxConfig?.standardDeduction ?? 0;
+
+    const taxableIncome = Math.max(0, totalExpectedAnnualIncome - standardDeduction);
+    let expectedTax = 0;
+    for (const bracket of brackets) {
+      if (taxableIncome <= bracket.min) break;
+      expectedTax += (Math.min(taxableIncome, bracket.max) - bracket.min) * bracket.rate;
+    }
+
+    const effectiveRatePercent = totalExpectedAnnualIncome > 0 ? (expectedTax / totalExpectedAnnualIncome) * 100 : 0;
+    for (const income of autoIncomes) {
+      income.setAutoWithholdingRate(effectiveRatePercent);
+    }
+  }
 }
 
 export interface IncomeData {
@@ -149,6 +178,7 @@ export class Income {
   private lastYear: number = 0;
   private incomeType: IncomeType;
   private withholdingRate: number;
+  private autoWithholding: boolean;
   private incomeTypeConfig: IncomeTypeConfig | undefined;
   private countryConfig: CountryConfig;
 
@@ -164,8 +194,23 @@ export class Income {
     this.frequency = data.frequency;
     this.incomeType = data.taxes.incomeType;
     this.withholdingRate = data.taxes.withholding ?? 0;
+    this.autoWithholding = data.taxes.autoWithholding ?? false;
     this.countryConfig = countryConfig;
     this.incomeTypeConfig = countryConfig.incomeTypes.find((t) => t.id === data.taxes.incomeType);
+  }
+
+  isAutoWithholding(): boolean {
+    return this.autoWithholding && (this.incomeTypeConfig?.supportsAutoWithholding ?? false);
+  }
+
+  setAutoWithholdingRate(ratePercent: number): void {
+    this.withholdingRate = ratePercent;
+  }
+
+  /** Returns this income's expected annual gross amount for the current simulation year, without mutating state. */
+  getExpectedAnnualAmount(): number {
+    const timesToApplyPerYear = this.getTimesToApplyPerYear();
+    return this.amount * timesToApplyPerYear;
   }
 
   /**
