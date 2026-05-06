@@ -3,16 +3,16 @@
 import { ConvexError } from 'convex/values';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { WalletIcon } from '@heroicons/react/24/outline';
 import { v4 as uuidv4 } from 'uuid';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import posthog from 'posthog-js';
 
 import { assetToConvex } from '@/lib/utils/data-transformers';
 import { DialogTitle, DialogBody, DialogActions } from '@/components/catalyst/dialog';
-import { assetFormSchema, type AssetInputs } from '@/lib/schemas/finances/asset-form-schema';
+import { assetFormSchema, type AssetInputs, PHYSICAL_ASSET_TYPES } from '@/lib/schemas/finances/asset-form-schema';
 import NumberInput from '@/components/ui/number-input';
 import { Fieldset, FieldGroup, Field, Label, ErrorMessage } from '@/components/catalyst/fieldset';
 import ErrorMessageCard from '@/components/ui/error-message-card';
@@ -21,6 +21,14 @@ import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/catalyst/input';
 import { getErrorMessages } from '@/lib/utils/form-utils';
 import { getCurrencySymbol, formatCurrencyPlaceholder } from '@/lib/utils/number-formatters';
+import { AVAILABLE_COUNTRIES, getCountryConfig } from '@/lib/country';
+
+const TAX_CATEGORY_LABELS: Record<string, string> = {
+  cashSavings: 'Bank Accounts',
+  taxable: 'Taxable Accounts',
+  taxDeferred: 'Tax-Deferred Accounts',
+  taxFree: 'Tax-Free Accounts',
+};
 
 interface AssetDialogProps {
   onClose: () => void;
@@ -31,15 +39,20 @@ interface AssetDialogProps {
 export default function AssetDialog({ onClose, selectedAsset: _selectedAsset, numAssets }: AssetDialogProps) {
   const [selectedAsset] = useState(_selectedAsset);
 
-  const newAssetDefaultValues = useMemo(
-    () =>
-      ({
-        name: 'Asset ' + (numAssets + 1),
-        id: '',
-        updatedAt: -1,
-        url: '',
-        type: 'savings' as AssetInputs['type'],
-      }) as const satisfies Partial<AssetInputs>,
+  const defaultCountry = selectedAsset?.country ?? 'US';
+  const defaultConfig = getCountryConfig(defaultCountry);
+
+  const newAssetDefaultValues: AssetInputs = useMemo(
+    () => ({
+      name: 'Asset ' + (numAssets + 1),
+      id: '',
+      value: 0,
+      updatedAt: -1,
+      url: '',
+      country: 'US',
+      type: defaultConfig.accountTypes[0]?.id ?? 'savings',
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [numAssets]
   );
 
@@ -49,6 +62,7 @@ export default function AssetDialog({ onClose, selectedAsset: _selectedAsset, nu
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(assetFormSchema),
@@ -56,6 +70,24 @@ export default function AssetDialog({ onClose, selectedAsset: _selectedAsset, nu
   });
 
   const hasFormErrors = Object.keys(errors).length > 0;
+
+  const selectedCountry = useWatch({ control, name: 'country' });
+  const selectedCountryConfig = useMemo(() => getCountryConfig(selectedCountry), [selectedCountry]);
+
+  useEffect(() => {
+    if (!selectedAsset) {
+      setValue('type', selectedCountryConfig.accountTypes[0]?.id ?? 'savings');
+    }
+  }, [selectedCountry, selectedCountryConfig, setValue, selectedAsset]);
+
+  const accountTypesByCategory = useMemo(() => {
+    const groups: Record<string, typeof selectedCountryConfig.accountTypes> = {};
+    for (const acct of selectedCountryConfig.accountTypes) {
+      if (!groups[acct.taxCategory]) groups[acct.taxCategory] = [];
+      groups[acct.taxCategory].push(acct);
+    }
+    return groups;
+  }, [selectedCountryConfig]);
 
   const m = useMutation(api.finances.upsertAsset);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -72,6 +104,10 @@ export default function AssetDialog({ onClose, selectedAsset: _selectedAsset, nu
       console.error('Error saving asset: ', error);
     }
   };
+
+  const isPhysicalAssetSelected = PHYSICAL_ASSET_TYPES.includes(
+    (useWatch({ control, name: 'type' }) ?? '') as (typeof PHYSICAL_ASSET_TYPES)[number]
+  );
 
   return (
     <>
@@ -114,26 +150,27 @@ export default function AssetDialog({ onClose, selectedAsset: _selectedAsset, nu
                 {errors.value && <ErrorMessage>{errors.value?.message}</ErrorMessage>}
               </Field>
               <Field>
+                <Label htmlFor="country">Country</Label>
+                <Select {...register('country')} id="country" name="country" disabled={!!selectedAsset}>
+                  {AVAILABLE_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field>
                 <Label htmlFor="type">Asset Type</Label>
                 <Select {...register('type')} id="type" name="type" disabled={!!selectedAsset}>
-                  <optgroup label="Bank Accounts">
-                    <option value="savings">Savings</option>
-                    <option value="checking">Checking</option>
-                  </optgroup>
-                  <optgroup label="Taxable Accounts">
-                    <option value="taxableBrokerage">Taxable Brokerage</option>
-                  </optgroup>
-                  <optgroup label="Tax-Deferred Accounts">
-                    <option value="401k">401(k)</option>
-                    <option value="403b">403(b)</option>
-                    <option value="ira">IRA</option>
-                    <option value="hsa">HSA</option>
-                  </optgroup>
-                  <optgroup label="Tax-Free Accounts">
-                    <option value="roth401k">Roth 401(k)</option>
-                    <option value="roth403b">Roth 403(b)</option>
-                    <option value="rothIra">Roth IRA</option>
-                  </optgroup>
+                  {Object.entries(accountTypesByCategory).map(([category, types]) => (
+                    <optgroup key={category} label={TAX_CATEGORY_LABELS[category] ?? category}>
+                      {types.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                   <optgroup label="Physical Assets">
                     <option value="realEstate">Real Estate</option>
                     <option value="vehicle">Vehicle</option>
@@ -145,24 +182,26 @@ export default function AssetDialog({ onClose, selectedAsset: _selectedAsset, nu
                 </Select>
                 {errors.type && <ErrorMessage>{errors.type?.message}</ErrorMessage>}
               </Field>
-              <Field>
-                <Label htmlFor="url" className="flex w-full items-center justify-between">
-                  <span className="whitespace-nowrap">URL</span>
-                  <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
-                </Label>
-                <Input
-                  {...register('url')}
-                  id="url"
-                  name="url"
-                  type="url"
-                  placeholder="https://www.example.com"
-                  autoComplete="off"
-                  inputMode="url"
-                  invalid={!!errors.url}
-                  aria-invalid={!!errors.url}
-                />
-                {errors.url && <ErrorMessage>{errors.url?.message}</ErrorMessage>}
-              </Field>
+              {!isPhysicalAssetSelected && (
+                <Field>
+                  <Label htmlFor="url" className="flex w-full items-center justify-between">
+                    <span className="whitespace-nowrap">URL</span>
+                    <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
+                  </Label>
+                  <Input
+                    {...register('url')}
+                    id="url"
+                    name="url"
+                    type="url"
+                    placeholder="https://www.example.com"
+                    autoComplete="off"
+                    inputMode="url"
+                    invalid={!!errors.url}
+                    aria-invalid={!!errors.url}
+                  />
+                  {errors.url && <ErrorMessage>{errors.url?.message}</ErrorMessage>}
+                </Field>
+              )}
             </FieldGroup>
           </DialogBody>
         </Fieldset>

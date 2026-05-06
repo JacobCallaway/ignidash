@@ -14,7 +14,8 @@ export const ukConfig: CountryConfig = {
       brackets: [
         { min: 0, max: 12570, rate: 0.0 },
         { min: 12570, max: 50270, rate: 0.2 },
-        { min: 50270, max: 125140, rate: 0.4 },
+        { min: 50270, max: 100000, rate: 0.4 },
+        { min: 100000, max: 125140, rate: 0.6 },
         { min: 125140, max: Infinity, rate: 0.45 },
       ],
     },
@@ -76,7 +77,7 @@ export const ukConfig: CountryConfig = {
       hasPercentBonds: true,
       hasCostBasis: false,
       hasContributionBasis: false, // No penalty for early withdrawal, no need to track basis
-      annualContributionLimits: [{ minAge: 0, limit: 20000 }],
+      annualContributionLimits: [{ minAge: 18, limit: 20000 }],
       supportsEmployerMatch: false,
       supportsMegaBackdoor: false,
       hasRmd: false,
