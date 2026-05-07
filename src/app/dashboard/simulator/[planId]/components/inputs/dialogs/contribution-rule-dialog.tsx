@@ -13,17 +13,8 @@ import posthog from 'posthog-js';
 import { useAccountsData, useDebtsData, useIncomesData, useTimelineData } from '@/hooks/use-convex-data';
 import { contributionToConvex } from '@/lib/utils/data-transformers';
 import { DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/catalyst/dialog';
-import {
-  contributionFormSchema,
-  type ContributionInputs,
-  supportsMaxBalance,
-  supportsIncomeAllocation,
-  supportsEmployerMatch,
-  supportsMegaBackdoorRoth,
-  getAccountTypeLimitKey,
-  getAnnualContributionLimit,
-  getAnnualSection415cLimit,
-} from '@/lib/schemas/inputs/contribution-form-schema';
+import { contributionFormSchema, type ContributionInputs, buildContributionHelpers } from '@/lib/schemas/inputs/contribution-form-schema';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import { accountTypeForDisplay } from '@/lib/schemas/inputs/account-form-schema';
 import { calculateAge } from '@/lib/schemas/inputs/timeline-form-schema';
 import NumberInput from '@/components/ui/number-input';
@@ -50,6 +41,15 @@ export default function ContributionRuleDialog({
 }: ContributionRuleDialogProps) {
   const planId = useSelectedPlanId();
   const [selectedContributionRule] = useState(_selectedContributionRule);
+  const countryConfig = useCountryConfig();
+  const {
+    supportsMaxBalance,
+    supportsIncomeAllocation,
+    supportsEmployerMatch,
+    supportsMegaBackdoorRoth,
+    getAnnualContributionLimit,
+    getAnnualSection415cLimit,
+  } = useMemo(() => buildContributionHelpers(countryConfig), [countryConfig]);
 
   const defaultRank = numContributionRules + 1;
   const newContributionRuleDefaultValues = useMemo(
@@ -121,8 +121,8 @@ export default function ContributionRuleDialog({
   const currentAge = timeline ? calculateAge(timeline.birthMonth, timeline.birthYear) : 18;
   const selectedAccountAnnualContributionLimit = selectedAccount
     ? enableMegaBackdoorRoth
-      ? getAnnualSection415cLimit(currentAge)
-      : getAnnualContributionLimit(getAccountTypeLimitKey(selectedAccount.type), currentAge)
+      ? getAnnualSection415cLimit(selectedAccount.type, currentAge)
+      : getAnnualContributionLimit(selectedAccount.type, currentAge)
     : null;
 
   const { data: incomes } = useIncomesData();
