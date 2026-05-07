@@ -125,7 +125,8 @@ export class FinancialSimulationEngine {
       simulationContext,
       contributionRules,
       countryConfig,
-      this.inputs.glidePath
+      this.inputs.glidePath,
+      debts
     );
     const taxProcessor = new TaxProcessor(simulationState, this.inputs.taxSettings.filingStatus, countryConfig);
 

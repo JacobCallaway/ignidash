@@ -53,7 +53,8 @@ export function accountFromConvex(account: Doc<'plans'>['accounts'][number]): Ac
 export function contributionFromConvex(contribution: Doc<'plans'>['contributionRules'][number]): ContributionInputs {
   const base = {
     id: contribution.id,
-    accountId: contribution.accountId,
+    accountId: contribution.accountId ?? '',
+    debtId: contribution.debtId,
     rank: contribution.rank,
     maxBalance: contribution.maxBalance,
     incomeId: contribution.incomeId,
@@ -110,6 +111,7 @@ export function debtFromConvex(debt: NonNullable<Doc<'plans'>['debts']>[number])
     interestType: debt.interestType,
     compoundingFrequency: debt.compoundingFrequency,
     startDate: { ...debt.startDate },
+    paymentType: debt.paymentType ?? 'fixed',
     monthlyPayment: debt.monthlyPayment,
     disabled: debt.disabled ?? false,
     syncedFinanceId: debt.syncedFinanceId,
@@ -223,7 +225,8 @@ export function accountToConvex(account: AccountInputs): Doc<'plans'>['accounts'
 export function contributionToConvex(contribution: ContributionInputs): Doc<'plans'>['contributionRules'][number] {
   const base = {
     id: contribution.id,
-    accountId: contribution.accountId,
+    accountId: contribution.accountId !== '' ? contribution.accountId : undefined,
+    debtId: contribution.debtId,
     rank: contribution.rank,
     disabled: contribution.disabled ?? false,
     maxBalance: contribution.maxBalance,
@@ -280,6 +283,7 @@ export function debtToConvex(debt: DebtInputs): NonNullable<Doc<'plans'>['debts'
     interestType: debt.interestType,
     compoundingFrequency: debt.compoundingFrequency,
     startDate: { ...debt.startDate },
+    paymentType: debt.paymentType,
     monthlyPayment: debt.monthlyPayment,
     disabled: debt.disabled ?? false,
     syncedFinanceId: debt.syncedFinanceId,

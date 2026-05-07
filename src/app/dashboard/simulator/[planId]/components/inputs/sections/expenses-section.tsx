@@ -39,12 +39,15 @@ function getExpenseDesc(expense: ExpenseInputs) {
 }
 
 function getDebtDesc(debt: DebtInputs) {
-  const payoffMonths = estimatePayoffMonths(debt);
+  const isMinimumPayment = (debt.paymentType ?? 'fixed') === 'minimumPayment';
+  const payoffMonths =
+    !isMinimumPayment && debt.monthlyPayment !== undefined ? estimatePayoffMonths({ ...debt, monthlyPayment: debt.monthlyPayment }) : null;
 
   return (
     <>
       <p>
-        {formatCompactCurrency(debt.monthlyPayment, 2)} / mo | {formatCompactCurrency(debt.balance, 2)} owed
+        {isMinimumPayment ? 'Min. payment' : `${formatCompactCurrency(debt.monthlyPayment ?? 0, 2)} / mo`} |{' '}
+        {formatCompactCurrency(debt.balance, 2)} owed
       </p>
       <p>
         {timeFrameForDisplay(debt.startDate)}

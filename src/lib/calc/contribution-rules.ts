@@ -50,9 +50,49 @@ export class ContributionTracker {
   }
 }
 
+/** A single contribution rule targeting a specific debt with extra payment logic */
+export class DebtContributionRule {
+  private ytdPayment = 0;
+
+  constructor(private contributionInput: ContributionInputs) {}
+
+  getDebtID(): string {
+    return this.contributionInput.debtId!;
+  }
+
+  getRank(): number {
+    return this.contributionInput.rank;
+  }
+
+  calculatePayment(remainingToContribute: number, debtBalance: number): number {
+    const desired = this.calculateDesiredPayment(remainingToContribute);
+    return Math.min(desired, remainingToContribute, debtBalance);
+  }
+
+  recordPayment(amount: number): void {
+    this.ytdPayment += amount;
+  }
+
+  resetYTD(): void {
+    this.ytdPayment = 0;
+  }
+
+  private calculateDesiredPayment(remainingToContribute: number): number {
+    switch (this.contributionInput.contributionType) {
+      case 'dollarAmount':
+        return Math.max(0, this.contributionInput.dollarAmount - this.ytdPayment);
+      case 'percentRemaining':
+        return remainingToContribute * (this.contributionInput.percentRemaining / 100);
+      case 'unlimited':
+        return Infinity;
+    }
+  }
+}
+
 /** Collection of contribution rules with a base strategy (spend or save surplus) */
 export class ContributionRules {
   private readonly contributionRules: ContributionRule[];
+  private readonly debtContributionRules: DebtContributionRule[];
   private readonly tracker: ContributionTracker;
 
   constructor(
@@ -62,11 +102,19 @@ export class ContributionRules {
   ) {
     this.tracker = new ContributionTracker();
     const helpers = buildContributionHelpers(countryConfig);
-    this.contributionRules = rules.filter((rule) => !rule.disabled).map((rule) => new ContributionRule(rule, this.tracker, helpers));
+    const activeRules = rules.filter((rule) => !rule.disabled);
+    this.contributionRules = activeRules
+      .filter((rule) => rule.accountId && rule.accountId !== '')
+      .map((rule) => new ContributionRule(rule, this.tracker, helpers));
+    this.debtContributionRules = activeRules.filter((rule) => !!rule.debtId).map((rule) => new DebtContributionRule(rule));
   }
 
   getRules(): ContributionRule[] {
     return this.contributionRules;
+  }
+
+  getDebtRules(): DebtContributionRule[] {
+    return this.debtContributionRules;
   }
 
   getBaseRuleType(): 'spend' | 'save' {
@@ -76,6 +124,9 @@ export class ContributionRules {
   resetYTD(): void {
     this.tracker.resetYTD();
     for (const rule of this.contributionRules) {
+      rule.resetYTD();
+    }
+    for (const rule of this.debtContributionRules) {
       rule.resetYTD();
     }
   }

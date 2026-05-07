@@ -465,7 +465,7 @@ export const formatPlanData = (plan: Doc<'plans'>, currencySymbol = '$'): string
       `  - Debts: ${debts
         .map(
           (d) =>
-            `${d.name} (${formatNumber(d.balance, 0, c)} bal, ${d.apr}% APR ${d.interestType}, ${formatNumber(d.monthlyPayment, 0, c)}/mo, starts ${timePointLabel(d.startDate)})`
+            `${d.name} (${formatNumber(d.balance, 0, c)} bal, ${d.apr}% APR ${d.interestType}, ${d.monthlyPayment !== undefined ? `${formatNumber(d.monthlyPayment, 0, c)}/mo` : 'minimum payment'}, starts ${timePointLabel(d.startDate)})`
         )
         .join('; ')}`
     );
@@ -524,7 +524,7 @@ export const formatPlanData = (plan: Doc<'plans'>, currencySymbol = '$'): string
     lines.push(
       `  - Contributions (in priority order): ${enabledRules
         .map((r) => {
-          const account = accountNameById[r.accountId] ?? r.accountId;
+          const account = r.accountId ? (accountNameById[r.accountId] ?? r.accountId) : (r.debtId ?? 'Unknown');
           const match = r.employerMatch ? ' (has employer match)' : '';
           const cap = r.maxBalance ? ` (up to ${formatNumber(r.maxBalance, 0, c)} balance)` : '';
           const mbr = r.enableMegaBackdoorRoth ? ' (mega-backdoor Roth)' : '';

@@ -25,7 +25,8 @@ export type BaseContributionInputs = z.infer<typeof baseContributionSchema>;
 
 const sharedContributionSchema = z.object({
   id: z.string(),
-  accountId: z.string(),
+  accountId: z.string().default(''),
+  debtId: z.string().optional(),
   rank: z.number().int().min(0),
   maxBalance: optionalCurrencyFieldForbidsZero('Max balance must be greater than zero'),
   incomeId: z.string().optional(),
@@ -54,8 +55,8 @@ export const contributionFormSchema = z
       contributionType: z.literal('unlimited'),
     }),
   ])
-  .refine((data) => data.accountId !== '', {
-    message: 'Account must be selected',
+  .refine((data) => data.accountId !== '' || !!data.debtId, {
+    message: 'Account or debt must be selected',
     path: ['accountId'],
   });
 

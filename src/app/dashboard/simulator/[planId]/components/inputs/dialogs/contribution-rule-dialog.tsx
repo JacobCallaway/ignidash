@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import posthog from 'posthog-js';
 
-import { useAccountsData, useIncomesData, useTimelineData } from '@/hooks/use-convex-data';
+import { useAccountsData, useDebtsData, useIncomesData, useTimelineData } from '@/hooks/use-convex-data';
 import { contributionToConvex } from '@/lib/utils/data-transformers';
 import { DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/catalyst/dialog';
 import {
@@ -96,11 +96,14 @@ export default function ContributionRuleDialog({
 
   const contributionType = useWatch({ control, name: 'contributionType' });
   const accountId = useWatch({ control, name: 'accountId' });
+  const watchedDebtId = useWatch({ control, name: 'debtId' });
   const enableMegaBackdoorRoth = useWatch({ control, name: 'enableMegaBackdoorRoth' });
   // 'percent' mode when employerMatchPercent is set (even if 0); 'fixed' otherwise
   const [employerMatchMode, setEmployerMatchMode] = useState<'fixed' | 'percent'>(
     selectedContributionRule?.employerMatchPercent !== undefined ? 'percent' : 'fixed'
   );
+  // target type: 'account' when accountId is set on existing rule, 'debt' when debtId is set
+  const [targetType, setTargetType] = useState<'account' | 'debt'>(selectedContributionRule?.debtId ? 'debt' : 'account');
 
   const getContributionTypeColSpan = () => {
     if (contributionType === 'dollarAmount' || contributionType === 'percentRemaining') return 'col-span-1';
@@ -110,6 +113,9 @@ export default function ContributionRuleDialog({
   const { data: accounts } = useAccountsData();
   const accountOptions = Object.entries(accounts).map(([id, account]) => ({ id, name: account.name, type: account.type }));
   const selectedAccount = accountId ? accounts[accountId] : null;
+
+  const { data: debts } = useDebtsData();
+  const debtOptions = Object.entries(debts).map(([id, debt]) => ({ id, name: debt.name }));
 
   const timeline = useTimelineData();
   const currentAge = timeline ? calculateAge(timeline.birthMonth, timeline.birthYear) : 18;
@@ -131,6 +137,18 @@ export default function ContributionRuleDialog({
       unregister('percentRemaining');
     }
 
+    if (targetType === 'debt') {
+      unregister('accountId');
+      unregister('maxBalance');
+      unregister('incomeId');
+      unregister('employerMatch');
+      unregister('employerMatchPercent');
+      unregister('enableMegaBackdoorRoth');
+      return;
+    }
+
+    unregister('debtId');
+
     if (!(selectedAccount && supportsMaxBalance(selectedAccount.type))) {
       unregister('maxBalance');
     }
@@ -151,7 +169,7 @@ export default function ContributionRuleDialog({
     if (!(selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type))) {
       unregister('enableMegaBackdoorRoth');
     }
-  }, [contributionType, unregister, selectedAccount, employerMatchMode]);
+  }, [contributionType, unregister, selectedAccount, employerMatchMode, targetType]);
 
   const { error: dollarAmountError } = getFieldState('dollarAmount');
   const { error: percentRemainingError } = getFieldState('percentRemaining');
@@ -173,26 +191,58 @@ export default function ContributionRuleDialog({
             <FieldGroup>
               {(saveError || hasFormErrors) && <ErrorMessageCard errorMessage={saveError || getErrorMessages(errors).join(', ')} />}
               <Divider soft className="hidden sm:block" />
-              <Field>
-                <Label htmlFor="accountId">To Account</Label>
-                <Select {...register('accountId')} id="accountId" name="accountId" defaultValue="" invalid={!!errors.accountId}>
-                  <option value="" disabled>
-                    Select account&hellip;
-                  </option>
-                  {accountOptions.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} | {accountTypeForDisplay(account.type)}
-                    </option>
-                  ))}
-                </Select>
-                {errors.accountId && <ErrorMessage>{errors.accountId?.message}</ErrorMessage>}
-                {selectedAccountAnnualContributionLimit !== null && Number.isFinite(selectedAccountAnnualContributionLimit) && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <Field>
+                  <Label htmlFor="targetType">Target</Label>
+                  <Select id="targetType" value={targetType} onChange={(e) => setTargetType(e.target.value as 'account' | 'debt')}>
+                    <option value="account">Account</option>
+                    <option value="debt">Debt</option>
+                  </Select>
+                </Field>
+                {targetType === 'account' && (
+                  <Field>
+                    <Label htmlFor="accountId">Account</Label>
+                    <Select {...register('accountId')} id="accountId" name="accountId" defaultValue="" invalid={!!errors.accountId}>
+                      <option value="" disabled>
+                        Select&hellip;
+                      </option>
+                      {accountOptions.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name} | {accountTypeForDisplay(account.type)}
+                        </option>
+                      ))}
+                    </Select>
+                    {errors.accountId && <ErrorMessage>{errors.accountId?.message}</ErrorMessage>}
+                  </Field>
+                )}
+                {targetType === 'debt' && (
+                  <Field>
+                    <Label htmlFor="debtId">Debt</Label>
+                    <Select {...register('debtId')} id="debtId" name="debtId" defaultValue="" invalid={!!errors.debtId}>
+                      <option value="" disabled>
+                        Select&hellip;
+                      </option>
+                      {debtOptions.map((debt) => (
+                        <option key={debt.id} value={debt.id}>
+                          {debt.name}
+                        </option>
+                      ))}
+                    </Select>
+                    {errors.debtId && <ErrorMessage>{errors.debtId?.message}</ErrorMessage>}
+                  </Field>
+                )}
+              </div>
+              {targetType === 'account' &&
+                selectedAccountAnnualContributionLimit !== null &&
+                Number.isFinite(selectedAccountAnnualContributionLimit) && (
                   <Description>
                     You can contribute up to <strong>{formatCompactCurrency(selectedAccountAnnualContributionLimit, 0)}</strong> per year.
                   </Description>
                 )}
-              </Field>
-              {selectedAccount && supportsIncomeAllocation(selectedAccount.type) && (
+              {targetType === 'debt' && watchedDebtId && (
+                <Description>Extra payments are capped at the remaining debt balance each month.</Description>
+              )}
+              {targetType === 'account' && selectedAccount && supportsIncomeAllocation(selectedAccount.type) && (
                 <>
                   <Field>
                     <Label htmlFor="incomeId">From Income</Label>
@@ -256,7 +306,7 @@ export default function ContributionRuleDialog({
                   </Field>
                 )}
               </div>
-              {selectedAccount && supportsMaxBalance(selectedAccount.type) && (
+              {targetType === 'account' && selectedAccount && supportsMaxBalance(selectedAccount.type) && (
                 <Field>
                   <Label htmlFor="maxBalance" className="flex w-full items-center justify-between">
                     <span className="whitespace-nowrap">Maximum Balance</span>
@@ -274,7 +324,7 @@ export default function ContributionRuleDialog({
                   <Description>Stop contributing to this account once it reaches this balance.</Description>
                 </Field>
               )}
-              {selectedAccount && supportsEmployerMatch(selectedAccount.type) && (
+              {targetType === 'account' && selectedAccount && supportsEmployerMatch(selectedAccount.type) && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                   <Field>
                     <Label htmlFor="employerMatchMode" className="flex w-full items-center justify-between">
@@ -325,7 +375,7 @@ export default function ContributionRuleDialog({
                   </Description>
                 </div>
               )}
-              {selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type) && (
+              {targetType === 'account' && selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type) && (
                 <>
                   <Divider soft />
                   <SwitchField>

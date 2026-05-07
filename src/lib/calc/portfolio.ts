@@ -37,7 +37,7 @@ import {
 import { ContributionRules } from './contribution-rules';
 import type { IncomesData } from './incomes';
 import type { ExpensesData } from './expenses';
-import type { DebtsData } from './debts';
+import { Debts, type DebtsData } from './debts';
 import type { PhysicalAssetsData } from './physical-assets';
 import type { AccountDataWithReturns } from './returns';
 
@@ -68,7 +68,8 @@ export class PortfolioProcessor {
     private simulationContext: SimulationContext,
     private contributionRules: ContributionRules,
     private countryConfig: CountryConfig = usConfig,
-    private glidePath?: GlidePathInputs
+    private glidePath?: GlidePathInputs,
+    private debts?: Debts
   ) {
     this.initialAssetAllocation = this.simulationState.portfolio.getWeightedAssetAllocation();
     this.extraSavingsAccount = this.createExtraSavingsAccount();
@@ -314,6 +315,24 @@ export class PortfolioProcessor {
 
       remainingToContribute -= contributionAmount;
       currentRuleIndex++;
+    }
+
+    // Process debt contribution rules: apply extra payments to debts from remaining surplus
+    if (this.debts && remainingToContribute > 0) {
+      const debtRules = this.contributionRules.getDebtRules().sort((a, b) => a.getRank() - b.getRank());
+      for (const rule of debtRules) {
+        if (remainingToContribute <= 0) break;
+        const debt = this.debts.getDebtById(rule.getDebtID());
+        if (!debt) {
+          console.warn(`Debt contribution rule references non-existent debt ID: ${rule.getDebtID()}`);
+          continue;
+        }
+        const paymentAmount = rule.calculatePayment(remainingToContribute, debt.getBalance());
+        if (paymentAmount <= 0) continue;
+        const actualPaid = debt.applyExtraPayment(paymentAmount);
+        rule.recordPayment(actualPaid);
+        remainingToContribute -= actualPaid;
+      }
     }
 
     let discretionaryExpense = 0;
