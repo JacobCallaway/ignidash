@@ -23,7 +23,7 @@ import { Button } from '@/components/catalyst/button';
 import { DialogActions } from '@/components/catalyst/dialog';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
 
-function getRetirementStrategyDesc(retirementStrategyType: 'fixedAge' | 'swrTarget') {
+function getRetirementStrategyDesc(retirementStrategyType: RetirementStrategyInputs['type']) {
   switch (retirementStrategyType) {
     case 'fixedAge':
       return <>Simulations will always retire at this age.</>;
@@ -41,16 +41,20 @@ function getRetirementStrategyDesc(retirementStrategyType: 'fixedAge' | 'swrTarg
           </a>
         </>
       );
+    case 'earliestPossible':
+      return <>Simulations will retire as soon as your portfolio can cover all remaining annual expenses through life expectancy.</>;
   }
 }
 
-function getRetirementStrategyError(errors: FieldErrors, retirementStrategyType: 'fixedAge' | 'swrTarget') {
+function getRetirementStrategyError(errors: FieldErrors, retirementStrategyType: RetirementStrategyInputs['type']) {
   switch (retirementStrategyType) {
     case 'fixedAge':
       return (errors.retirementStrategy as FieldErrors<Extract<RetirementStrategyInputs, { type: 'fixedAge' }>>)?.retirementAge?.message;
     case 'swrTarget':
       return (errors.retirementStrategy as FieldErrors<Extract<RetirementStrategyInputs, { type: 'swrTarget' }>>)?.safeWithdrawalRate
         ?.message;
+    case 'earliestPossible':
+      return undefined;
   }
 }
 
@@ -208,6 +212,7 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
                   <Select {...register('retirementStrategy.type')} id="retirementStrategy.type" name="retirementStrategy.type">
                     <option value="fixedAge">Fixed Age</option>
                     <option value="swrTarget">SWR Target</option>
+                    <option value="earliestPossible">Earliest Possible</option>
                   </Select>
                 </Field>
                 {retirementStrategyType === 'fixedAge' && (
@@ -238,6 +243,11 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
                       autoFocus={timeline !== null}
                     />
                     <ErrorMessage>{getRetirementStrategyError(errors, retirementStrategyType)}</ErrorMessage>
+                    <Description>{getRetirementStrategyDesc(retirementStrategyType)}</Description>
+                  </Field>
+                )}
+                {retirementStrategyType === 'earliestPossible' && (
+                  <Field>
                     <Description>{getRetirementStrategyDesc(retirementStrategyType)}</Description>
                   </Field>
                 )}

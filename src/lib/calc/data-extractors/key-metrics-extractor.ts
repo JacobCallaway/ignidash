@@ -50,6 +50,7 @@ export abstract class KeyMetricsExtractor {
 
         break;
       case 'swrTarget':
+      case 'earliestPossible':
         for (const dp of data) {
           const phase = dp.phase;
           if (phase?.name === 'retirement') {

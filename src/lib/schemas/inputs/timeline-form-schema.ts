@@ -21,6 +21,9 @@ export const retirementStrategySchema = z.discriminatedUnion('type', [
     safeWithdrawalRate: percentageField(2, 6, 'Safe withdrawal rate'),
     type: z.literal('swrTarget'),
   }),
+  z.object({
+    type: z.literal('earliestPossible'),
+  }),
 ]);
 
 export const timelineFormSchema = z

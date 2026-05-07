@@ -426,7 +426,9 @@ export const formatPlanData = (plan: Doc<'plans'>, currencySymbol = '$'): string
     const retirementInfo =
       retirementStrategy.type === 'fixedAge'
         ? `Retirement Age: ${retirementStrategy.retirementAge}`
-        : `SWR Target: ${retirementStrategy.safeWithdrawalRate}%`;
+        : retirementStrategy.type === 'swrTarget'
+          ? `SWR Target: ${retirementStrategy.safeWithdrawalRate}%`
+          : `Earliest Possible`;
 
     lines.push(`  - Timeline: Age: ${calculateAge(birthMonth, birthYear)}, Life Expectancy: ${lifeExpectancy}, ${retirementInfo}`);
   }
