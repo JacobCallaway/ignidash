@@ -26,6 +26,21 @@ export interface ContributionLimitTier {
   limit: number;
 }
 
+/**
+ * Declarative income-based taper: reduces the base limit when annual income exceeds a threshold.
+ * Reduction = floor(excess * taperRate), floored at minAllowance.
+ * Example (UK SIPP): thresholdIncome=260000, taperRate=0.5, minAllowance=10000
+ *   → limit decreases £1 for every £2 of income above £260k, minimum £10k.
+ */
+export interface TaperedAllowanceConfig {
+  /** Gross annual income above which the allowance starts to reduce */
+  thresholdIncome: number;
+  /** Floor — the allowance cannot fall below this value */
+  minAllowance: number;
+  /** Allowance reduced by this fraction per £1 of income above the threshold (e.g. 0.5 = £1 per £2) */
+  taperRate: number;
+}
+
 export interface AccountTypeConfig {
   id: string;
   label: string;
@@ -35,6 +50,8 @@ export interface AccountTypeConfig {
   hasContributionBasis: boolean;
   /** Annual contribution limits by age tier (sorted highest minAge first). Absent = unlimited. */
   annualContributionLimits?: ContributionLimitTier[];
+  /** Income-based taper applied on top of the age-tiered limit. Absent = no tapering. */
+  taperedAllowance?: TaperedAllowanceConfig;
   /** Accounts sharing a combined limit with this account */
   sharedLimitGroup?: string;
   /** Total annual limit across all contributions (self + employer) by age tier */

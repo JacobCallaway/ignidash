@@ -22,14 +22,30 @@ export function getAccountTypeConfig(config: CountryConfig, typeId: string): Acc
   return config.accountTypes.find((t) => t.id === typeId);
 }
 
-/** Returns the annual contribution limit for an account type at a given age. Infinity = unlimited. */
-export function getContributionLimit(config: AccountTypeConfig, age: number): number {
+/**
+ * Returns the annual contribution limit for an account type at a given age.
+ * If the account type has a taperedAllowance and annualIncome is provided,
+ * the limit is reduced when income exceeds the threshold. Infinity = unlimited.
+ */
+export function getContributionLimit(config: AccountTypeConfig, age: number, annualIncome?: number): number {
   const tiers = config.annualContributionLimits;
   if (!tiers || tiers.length === 0) return Infinity;
+
+  let limit = tiers[tiers.length - 1].limit;
   for (const tier of tiers) {
-    if (age >= tier.minAge && (tier.maxAge === undefined || age <= tier.maxAge)) return tier.limit;
+    if (age >= tier.minAge && (tier.maxAge === undefined || age <= tier.maxAge)) {
+      limit = tier.limit;
+      break;
+    }
   }
-  return tiers[tiers.length - 1].limit;
+
+  const taper = config.taperedAllowance;
+  if (taper && annualIncome !== undefined && annualIncome > taper.thresholdIncome) {
+    const reduction = Math.floor((annualIncome - taper.thresholdIncome) * taper.taperRate);
+    limit = Math.max(taper.minAllowance, limit - reduction);
+  }
+
+  return limit;
 }
 
 /** Returns the Section 415(c) total annual limit for an account type at a given age. Infinity = no such limit. */

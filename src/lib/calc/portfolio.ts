@@ -270,58 +270,53 @@ export class PortfolioProcessor {
     const age = this.simulationState.time.age;
 
     this.contributionRules.resetMonthly();
-    const contributionRules = this.contributionRules.getRules().sort((a, b) => a.getRank() - b.getRank());
+
+    type AccountEntry = { kind: 'account'; rule: import('./contribution-rules').ContributionRule };
+    type DebtEntry = { kind: 'debt'; rule: import('./contribution-rules').DebtContributionRule };
+    const allRules: (AccountEntry | DebtEntry)[] = [
+      ...this.contributionRules.getRules().map((rule) => ({ kind: 'account' as const, rule })),
+      ...this.contributionRules.getDebtRules().map((rule) => ({ kind: 'debt' as const, rule })),
+    ].sort((a, b) => a.rule.getRank() - b.rule.getRank());
 
     let employerMatch = 0;
-
     let remainingToContribute = netCashFlow - shortfallRepaid;
-    let currentRuleIndex = 0;
-    while (remainingToContribute > 0 && currentRuleIndex < contributionRules.length) {
-      const rule = contributionRules[currentRuleIndex];
 
-      const contributeToAccountID = rule.getAccountID();
-      const contributeToAccount = this.simulationState.portfolio.getAccountById(contributeToAccountID);
-      if (!contributeToAccount) {
-        console.warn(`Contribution rule references non-existent account ID: ${contributeToAccountID}`);
+    for (const entry of allRules) {
+      if (remainingToContribute <= 0) break;
 
-        currentRuleIndex++;
-        continue;
-      }
+      if (entry.kind === 'account') {
+        const rule = entry.rule;
+        const contributeToAccountID = rule.getAccountID();
+        const contributeToAccount = this.simulationState.portfolio.getAccountById(contributeToAccountID);
+        if (!contributeToAccount) {
+          console.warn(`Contribution rule references non-existent account ID: ${contributeToAccountID}`);
+          continue;
+        }
 
-      const { contributionAmount, employerMatchAmount } = rule.calculateContribution(
-        remainingToContribute,
-        contributeToAccount,
-        age,
-        incomesData
-      );
-      if (contributionAmount <= 0) {
-        currentRuleIndex++;
-        continue;
-      }
+        const { contributionAmount, employerMatchAmount } = rule.calculateContribution(
+          remainingToContribute,
+          contributeToAccount,
+          age,
+          incomesData
+        );
+        if (contributionAmount <= 0) continue;
 
-      const contributionAllocation = this.getAllocationForContribution(contributionAmount + employerMatchAmount);
-      const contributedAssets = contributeToAccount.applyContribution(contributionAmount, 'self', contributionAllocation);
-      byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID] ?? zeroFlows(), contributedAssets);
+        const contributionAllocation = this.getAllocationForContribution(contributionAmount + employerMatchAmount);
+        const contributedAssets = contributeToAccount.applyContribution(contributionAmount, 'self', contributionAllocation);
+        byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID] ?? zeroFlows(), contributedAssets);
 
-      if (employerMatchAmount > 0) {
-        const matchedAssets = contributeToAccount.applyContribution(employerMatchAmount, 'employer', contributionAllocation);
-        byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID], matchedAssets);
-      }
+        if (employerMatchAmount > 0) {
+          const matchedAssets = contributeToAccount.applyContribution(employerMatchAmount, 'employer', contributionAllocation);
+          byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID], matchedAssets);
+        }
 
-      employerMatchByAccount[contributeToAccountID] = (employerMatchByAccount[contributeToAccountID] ?? 0) + employerMatchAmount;
-      employerMatch += employerMatchAmount;
-
-      rule.recordContribution(contributionAmount, employerMatchAmount, contributeToAccount.getAccountType());
-
-      remainingToContribute -= contributionAmount;
-      currentRuleIndex++;
-    }
-
-    // Process debt contribution rules: apply extra payments to debts from remaining surplus
-    if (this.debts && remainingToContribute > 0) {
-      const debtRules = this.contributionRules.getDebtRules().sort((a, b) => a.getRank() - b.getRank());
-      for (const rule of debtRules) {
-        if (remainingToContribute <= 0) break;
+        employerMatchByAccount[contributeToAccountID] = (employerMatchByAccount[contributeToAccountID] ?? 0) + employerMatchAmount;
+        employerMatch += employerMatchAmount;
+        rule.recordContribution(contributionAmount, employerMatchAmount, contributeToAccount.getAccountType());
+        remainingToContribute -= contributionAmount;
+      } else {
+        if (!this.debts) continue;
+        const rule = entry.rule;
         const debt = this.debts.getDebtById(rule.getDebtID());
         if (!debt) {
           console.warn(`Debt contribution rule references non-existent debt ID: ${rule.getDebtID()}`);

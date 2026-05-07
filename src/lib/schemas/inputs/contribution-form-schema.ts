@@ -67,10 +67,10 @@ export function buildContributionHelpers(config: CountryConfig) {
   return {
     getSharedLimitAccounts: (accountTypeId: string): string[] => getSharedLimitAccountIds(config, accountTypeId),
     getLimitGroupKey: (accountTypeId: string): string => getLimitGroupKey(config, accountTypeId),
-    getAnnualContributionLimit: (accountTypeId: string, age: number): number => {
+    getAnnualContributionLimit: (accountTypeId: string, age: number, annualIncome?: number): number => {
       const acct = config.accountTypes.find((t) => t.id === accountTypeId);
       if (!acct) return Infinity;
-      return getContributionLimit(acct, age);
+      return getContributionLimit(acct, age, annualIncome);
     },
     getAnnualSection415cLimit: (accountTypeId: string, age: number): number => {
       const acct = config.accountTypes.find((t) => t.id === accountTypeId);

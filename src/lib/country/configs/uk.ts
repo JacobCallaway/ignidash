@@ -90,8 +90,9 @@ export const ukConfig: CountryConfig = {
       hasPercentBonds: true,
       hasCostBasis: false,
       hasContributionBasis: false,
-      // Annual Allowance £60,000 (simplified; tapered allowance for high earners not modelled)
+      // Annual Allowance £60,000; tapered for adjusted income above £260,000 (min £10,000)
       annualContributionLimits: [{ minAge: 0, limit: 60000 }],
+      taperedAllowance: { thresholdIncome: 260000, minAllowance: 10000, taperRate: 0.5 },
       // 25% of each withdrawal is tax-free (Pension Commencement Lump Sum)
       taxFreeLumpSumPercent: 0.25,
       supportsEmployerMatch: true,
@@ -144,8 +145,7 @@ export const ukConfig: CountryConfig = {
   rmd: undefined,
 
   //todo: add stamp duty tax for house purchases (could be modelled as a one-time capital gains tax triggered by physical asset purchase)
-  //todo: add tapered annual allowance for high earners (e.g. reduce £60k limit by £1 for every £2 of income above £240k)
-  //todo:ensure sipp contributions don't py NI or income tax, and that sipp withdrawals do (except for 25% tax-free lump sum)
+  //todo: ensure sipp contributions don't pay NI or income tax, and that sipp withdrawals do (except for 25% tax-free lump sum)
   //todo: support automatic tranferring of GIA assets into ISA (i.e. bed-and-ISA strategy)
   //todo: add state pension modelling (e.g. based on National Insurance contribution history, with options to defer for higher payments later)
 

@@ -167,10 +167,12 @@ export class ContributionRule {
       ? Math.max(0, this.contributionInput.maxBalance - account.getBalance())
       : Infinity;
 
+    const annualIncome = incomesData ? incomesData.totalIncome * 12 : undefined;
+
     const maxContribution = Math.min(
       remainingToMaxBalance,
       remainingToContribute,
-      this.calculateRemainingAccountTypeLimit(account, age),
+      this.calculateRemainingAccountTypeLimit(account, age, annualIncome),
       this.calculateIncomeLimit(incomesData)
     );
 
@@ -235,7 +237,7 @@ export class ContributionRule {
     }
   }
 
-  private calculateRemainingAccountTypeLimit(account: Account, age: number): number {
+  private calculateRemainingAccountTypeLimit(account: Account, age: number, annualIncome?: number): number {
     const accountType = account.getAccountType();
     const sharedGroup = this.helpers.getSharedLimitAccounts(accountType);
     if (!sharedGroup.length) return Infinity;
@@ -247,7 +249,7 @@ export class ContributionRule {
       return Math.max(0, this.helpers.getAnnualSection415cLimit(accountType, age) - totalContributionsSoFar);
     }
 
-    const limit = this.helpers.getAnnualContributionLimit(accountType, age);
+    const limit = this.helpers.getAnnualContributionLimit(accountType, age, annualIncome);
     if (!Number.isFinite(limit)) return Infinity;
 
     const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(sharedGroup);
