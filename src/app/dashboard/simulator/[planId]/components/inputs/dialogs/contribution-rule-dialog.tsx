@@ -106,7 +106,8 @@ export default function ContributionRuleDialog({
   const [targetType, setTargetType] = useState<'account' | 'debt'>(selectedContributionRule?.debtId ? 'debt' : 'account');
 
   const getContributionTypeColSpan = () => {
-    if (contributionType === 'dollarAmount' || contributionType === 'percentRemaining') return 'col-span-1';
+    if (contributionType === 'dollarAmount' || contributionType === 'percentRemaining' || contributionType === 'percentOfIncome')
+      return 'col-span-1';
     return 'col-span-2';
   };
 
@@ -135,6 +136,10 @@ export default function ContributionRuleDialog({
 
     if (!(contributionType === 'percentRemaining')) {
       unregister('percentRemaining');
+    }
+
+    if (!(contributionType === 'percentOfIncome')) {
+      unregister('percentOfIncome');
     }
 
     if (targetType === 'debt') {
@@ -173,6 +178,7 @@ export default function ContributionRuleDialog({
 
   const { error: dollarAmountError } = getFieldState('dollarAmount');
   const { error: percentRemainingError } = getFieldState('percentRemaining');
+  const { error: percentOfIncomeError } = getFieldState('percentOfIncome');
 
   return (
     <>
@@ -269,7 +275,8 @@ export default function ContributionRuleDialog({
                     name="contributionType"
                     invalid={!!errors.contributionType}
                   >
-                    <option value="dollarAmount">Dollar Amount</option>
+                    <option value="dollarAmount">Fixed Amount</option>
+                    <option value="percentOfIncome">% of Income</option>
                     <option value="percentRemaining">% Remaining</option>
                     <option value="unlimited">Unlimited</option>
                   </Select>
@@ -288,6 +295,21 @@ export default function ContributionRuleDialog({
                       autoFocus={selectedContributionRule !== null}
                     />
                     {dollarAmountError && <ErrorMessage>{dollarAmountError.message}</ErrorMessage>}
+                  </Field>
+                )}
+                {contributionType === 'percentOfIncome' && (
+                  <Field>
+                    <Label htmlFor="percentOfIncome">% of Income</Label>
+                    <NumberInput
+                      name="percentOfIncome"
+                      control={control}
+                      id="percentOfIncome"
+                      inputMode="decimal"
+                      placeholder="5%"
+                      suffix="%"
+                      autoFocus={selectedContributionRule !== null}
+                    />
+                    {percentOfIncomeError && <ErrorMessage>{percentOfIncomeError.message}</ErrorMessage>}
                   </Field>
                 )}
                 {contributionType === 'percentRemaining' && (
@@ -370,7 +392,7 @@ export default function ContributionRuleDialog({
                   )}
                   <Description className="col-span-2">
                     {employerMatchMode === 'percent'
-                      ? 'Employer matches your contributions up to this percentage of the linked income each year.'
+                      ? 'Employer contributes this percentage of the linked income each year, independent of your contribution.'
                       : 'Employer will match your contributions dollar-for-dollar up to this annual amount.'}
                   </Description>
                 </div>

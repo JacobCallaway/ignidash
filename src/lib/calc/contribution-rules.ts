@@ -83,6 +83,8 @@ export class DebtContributionRule {
         return Math.max(0, this.contributionInput.dollarAmount - this.ytdPayment);
       case 'percentRemaining':
         return remainingToContribute * (this.contributionInput.percentRemaining / 100);
+      case 'percentOfIncome':
+        return Infinity; // Debt rules don't use income-based contributions; treat as unlimited
       case 'unlimited':
         return Infinity;
     }
@@ -176,7 +178,7 @@ export class ContributionRule {
       this.calculateIncomeLimit(incomesData)
     );
 
-    const desiredContribution = this.calculateDesiredContribution(remainingToContribute);
+    const desiredContribution = this.calculateDesiredContribution(remainingToContribute, incomesData);
 
     const contributionAmount = Math.min(desiredContribution, maxContribution);
     const employerMatchAmount = this.calculateEmployerMatch(contributionAmount, incomesData);
@@ -204,6 +206,10 @@ export class ContributionRule {
     return this.contributionInput.rank;
   }
 
+  isPercentOfIncomeType(): boolean {
+    return this.contributionInput.contributionType === 'percentOfIncome';
+  }
+
   private calculateIncomeLimit(incomesData: IncomesData | null): number {
     const incomeId = this.contributionInput.incomeId;
     if (!incomeId) return Infinity;
@@ -211,13 +217,12 @@ export class ContributionRule {
   }
 
   private calculateEmployerMatch(contributionAmount: number, incomesData: IncomesData | null): number {
-    // Percent-of-income match: employer contributes up to X% of the linked income per year
+    // Percent-of-income match: employer contributes their % of income independently of employee amount
     if (this.contributionInput.employerMatchPercent !== undefined) {
       const incomeId = this.contributionInput.incomeId;
       const monthlyIncome = incomeId ? (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) : (incomesData?.totalIncome ?? 0);
       const maxAnnualMatch = (this.contributionInput.employerMatchPercent / 100) * monthlyIncome * 12;
-      const remainingToMax = Math.max(0, maxAnnualMatch - this.ytdEmployerMatch);
-      return Math.min(contributionAmount, remainingToMax);
+      return Math.max(0, maxAnnualMatch - this.ytdEmployerMatch);
     }
 
     // Fixed dollar match: employer matches dollar-for-dollar up to the annual cap
@@ -226,12 +231,18 @@ export class ContributionRule {
     return Math.min(contributionAmount, remainingToMaxEmployerMatch);
   }
 
-  private calculateDesiredContribution(remainingToContribute: number): number {
+  private calculateDesiredContribution(remainingToContribute: number, incomesData: IncomesData | null): number {
     switch (this.contributionInput.contributionType) {
       case 'dollarAmount':
         return Math.max(0, this.contributionInput.dollarAmount - this.ytdEmployeeContribution);
       case 'percentRemaining':
         return remainingToContribute * (this.contributionInput.percentRemaining / 100);
+      case 'percentOfIncome': {
+        const incomeId = this.contributionInput.incomeId;
+        const monthlyIncome = incomeId ? (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) : (incomesData?.totalIncome ?? 0);
+        const annualTarget = (this.contributionInput.percentOfIncome / 100) * monthlyIncome * 12;
+        return Math.max(0, annualTarget - this.ytdEmployeeContribution);
+      }
       case 'unlimited':
         return Infinity;
     }

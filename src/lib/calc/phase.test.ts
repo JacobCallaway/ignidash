@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
 import type { TimelineInputs } from '@/lib/schemas/inputs/timeline-form-schema';
+import type { MarketAssumptionsInputs } from '@/lib/schemas/inputs/market-assumptions-form-schema';
+import type { CountryConfig } from '@/lib/country/types';
 
 import { PhaseIdentifier, type PhaseData } from './phase';
 import type { SimulationState } from './simulation-engine';
@@ -22,10 +24,47 @@ import { createEmptyExpensesData, createEmptyDebtsData, createEmptyPhysicalAsset
 // Test Helpers
 // ============================================================================
 
-const createMockPortfolio = (totalValue: number): Portfolio =>
-  ({
+const createMockPortfolio = (totalValue: number, stockFraction = 0.6): Portfolio => {
+  const account = { getBalance: () => totalValue, getAccountType: () => 'gia' as string };
+  return {
     getTotalValue: () => totalValue,
-  }) as unknown as Portfolio;
+    getWeightedAssetAllocation: () => ({ stocks: stockFraction, bonds: 1 - stockFraction, cash: 0 }),
+    getAccounts: () => [account],
+  } as unknown as Portfolio;
+};
+
+/** Portfolio split between accessible and locked (e.g. pension) account types */
+const createSplitPortfolio = (accessibleValue: number, lockedValue: number): Portfolio => {
+  const mockAccounts = [
+    { getBalance: () => accessibleValue, getAccountType: () => 'gia' },
+    { getBalance: () => lockedValue, getAccountType: () => 'sipp' },
+  ];
+  return {
+    getTotalValue: () => accessibleValue + lockedValue,
+    getWeightedAssetAllocation: () => ({ stocks: 1, bonds: 0, cash: 0 }),
+    getAccounts: () => mockAccounts,
+  } as unknown as Portfolio;
+};
+
+/** Minimal CountryConfig stub with a pension-like lock until age 57 */
+const mockCountryConfig: CountryConfig = {
+  code: 'GB',
+  name: 'United Kingdom',
+  currency: { code: 'GBP', symbol: '£', locale: 'en-GB' },
+  filingStatuses: [],
+  incomeTax: {},
+  capitalGainsTax: {},
+  payrollTax: null,
+  accountTypes: [],
+  earlyWithdrawalPenaltyGroups: [],
+  incomeTypes: [],
+  penaltyFreeAge: 57,
+  withdrawalOrder: {
+    beforePenaltyFreeAge: [{ accountTypeId: 'gia' }],
+    afterPenaltyFreeAge: [{ accountTypeId: 'gia' }, { accountTypeId: 'sipp' }],
+  },
+  aiPromptContext: '',
+};
 
 const createSimulationState = (overrides: {
   age?: number;
@@ -136,7 +175,7 @@ describe('PhaseIdentifier - swrTarget Strategy', () => {
       expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
     });
 
-    it('calculates mean across multiple expense periods', () => {
+    it('uses the most recent expense period, not the historical mean', () => {
       const timeline = createSwrTargetTimeline(4); // 4% SWR = $40k
       const state = createSimulationState({
         portfolio: createMockPortfolio(1_000_000),
@@ -144,12 +183,29 @@ describe('PhaseIdentifier - swrTarget Strategy', () => {
           createEmptyExpensesData({ totalExpenses: 20_000 }),
           createEmptyExpensesData({ totalExpenses: 40_000 }),
           createEmptyExpensesData({ totalExpenses: 30_000 }),
-          // Mean = 30_000 < 40_000 SWR
+          // Most recent = 30_000 < 40_000 SWR → retires
+          // (historical mean also 30_000 here, but the check uses the last data point)
         ],
       });
       const phaseIdentifier = new PhaseIdentifier(state, timeline);
 
       expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+    });
+
+    it('stays in accumulation when the most recent expense year exceeds SWR amount', () => {
+      const timeline = createSwrTargetTimeline(4); // 4% SWR = $40k
+      const state = createSimulationState({
+        portfolio: createMockPortfolio(1_000_000),
+        expenses: [
+          createEmptyExpensesData({ totalExpenses: 20_000 }), // earlier years were cheap
+          createEmptyExpensesData({ totalExpenses: 20_000 }),
+          createEmptyExpensesData({ totalExpenses: 50_000 }), // most recent year is above SWR
+          // Mean = 30_000 < 40_000 → old logic would retire; most-recent = 50_000 > 40_000 → stays
+        ],
+      });
+      const phaseIdentifier = new PhaseIdentifier(state, timeline);
+
+      expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'accumulation' });
     });
   });
 
@@ -553,5 +609,292 @@ describe('PhaseIdentifier - swrTarget Strategy Variable SWR Rates', () => {
 
       expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
     });
+  });
+});
+
+// ============================================================================
+// earliestPossible Strategy Tests
+// ============================================================================
+
+const createEarliestPossibleTimeline = (lifeExpectancy = 87): TimelineInputs => ({
+  lifeExpectancy,
+  birthMonth: 1,
+  birthYear: 1989, // age = 35 at 2024
+  retirementStrategy: { type: 'earliestPossible' },
+});
+
+const defaultMarketAssumptions: MarketAssumptionsInputs = {
+  stockReturn: 7, // 7% nominal stocks
+  stockYield: 2,
+  bondReturn: 3, // 3% nominal bonds
+  bondYield: 3,
+  cashReturn: 1,
+  inflationRate: 2, // 2% inflation → stock real ≈ 4.9%, bond real ≈ 0.98%
+};
+
+describe('PhaseIdentifier - earliestPossible Strategy', () => {
+  it('stays in accumulation when no annual expense data yet', () => {
+    const timeline = createEarliestPossibleTimeline();
+    const state = createSimulationState({ age: 35, expenses: [] });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, defaultMarketAssumptions);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'accumulation' });
+  });
+
+  it('transitions to retirement once already retired (sticky)', () => {
+    const timeline = createEarliestPossibleTimeline();
+    const state = createSimulationState({ age: 50, phase: { name: 'retirement' } });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, defaultMarketAssumptions);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('forces retirement when past life expectancy', () => {
+    const timeline = createEarliestPossibleTimeline(80);
+    const state = createSimulationState({
+      age: 85,
+      expenses: [createEmptyExpensesData({ totalExpenses: 50_000 })],
+      portfolio: createMockPortfolio(0),
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, defaultMarketAssumptions);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('stays in accumulation when portfolio too small vs PV of expenses', () => {
+    // age 35, life expectancy 87 → 52 remaining years, $50k/yr expenses
+    // With ~4.9% real return on 60/40 portfolio, PV ≈ $50k × 18.4 ≈ $920k
+    // $500k is clearly not enough
+    const timeline = createEarliestPossibleTimeline(87);
+    const state = createSimulationState({
+      age: 35,
+      portfolio: createMockPortfolio(500_000),
+      expenses: [createEmptyExpensesData({ totalExpenses: 50_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, defaultMarketAssumptions);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'accumulation' });
+  });
+
+  it('triggers retirement when portfolio is sufficient to sustain remaining expenses', () => {
+    // age 65, life expectancy 87 → 22 remaining years, $40k/yr expenses, 3.33% real return
+    // Simulation (annuity-due): withdraw then grow each year; $650k ends with positive balance after 22 years
+    const timeline = createEarliestPossibleTimeline(87);
+    const state = createSimulationState({
+      age: 65,
+      portfolio: createMockPortfolio(650_000),
+      expenses: [createEmptyExpensesData({ totalExpenses: 40_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, defaultMarketAssumptions);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('does not retire early under 0% real return fallback when portfolio equals expenses × years', () => {
+    // Without market assumptions, falls back to 0% return: need $40k × 52 = $2.08M
+    // $2.08M should trigger retirement
+    const timeline = createEarliestPossibleTimeline(87);
+    const state = createSimulationState({
+      age: 35,
+      portfolio: createMockPortfolio(2_100_000),
+      expenses: [createEmptyExpensesData({ totalExpenses: 40_000 })],
+    });
+    // No marketAssumptions → falls back to 0% real return
+    const phaseIdentifier = new PhaseIdentifier(state, timeline);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('requires less portfolio with positive real returns — same expenses, smaller portfolio retires sooner', () => {
+    // The simulation withdraws then grows each year, so real returns shrink the required starting portfolio.
+    // age 50, life expectancy 87 → 37 remaining years, $40k/yr expenses
+    // 0% return: each withdrawal depletes $40k permanently; $1M / $40k = 25 years → runs out → accumulation
+    // 3.33% real: portfolio earns back faster than depleted; $1M survives 37 years → retirement
+    const timeline = createEarliestPossibleTimeline(87);
+    const expenses = [createEmptyExpensesData({ totalExpenses: 40_000 })];
+    const portfolio = createMockPortfolio(1_000_000);
+
+    const stateNoMA = createSimulationState({ age: 50, portfolio, expenses });
+    const noMA = new PhaseIdentifier(stateNoMA, timeline);
+    expect(noMA.getCurrentPhase()).toEqual({ name: 'accumulation' });
+
+    const stateWithMA = createSimulationState({ age: 50, portfolio, expenses });
+    const withMA = new PhaseIdentifier(stateWithMA, timeline, defaultMarketAssumptions);
+    expect(withMA.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+});
+
+// ============================================================================
+// swrTarget — Liquidity / Locked-Account Constraint Tests
+// ============================================================================
+
+describe('PhaseIdentifier - swrTarget liquidity constraint (locked accounts)', () => {
+  // Scenario matching the user-reported bug:
+  // - Income: £160k, expenses: £80k, SWR: 6%
+  // - SWR target: need £80k / 0.06 = £1,333,333 portfolio
+  // - All savings are in SIPP (locked until 57); accessible accounts (GIA) are near empty
+  // - Without the liquidity check, swrTarget fires when SIPP alone crosses £1.33M,
+  //   then retirement immediately causes shortfalls because SIPP can't be drawn pre-57.
+
+  const ma: MarketAssumptionsInputs = {
+    stockReturn: 10,
+    stockYield: 3.5,
+    bondReturn: 5,
+    bondYield: 4.5,
+    cashReturn: 3,
+    inflationRate: 3,
+  };
+
+  it('stays in accumulation when SWR condition is met but accessible funds cannot bridge to unlock age', () => {
+    // age 40, penaltyFreeAge 57 → 17 years to bridge
+    // SWR 6%: portfolio £1.4M → safeWithdrawalAmount £84k > expenses £80k → primary check passes
+    // Real return (100% stocks): (1.10/1.03)-1 ≈ 6.8%
+    // PV(80k, 17yr, 6.8%) ≈ 80k × 9.25 ≈ £740k accessible needed
+    // GIA = £25k << £740k → liquidity check fails → accumulation
+    const timeline = createSwrTargetTimeline(6);
+    const state = createSimulationState({
+      age: 40,
+      portfolio: createSplitPortfolio(25_000, 1_375_000), // £25k GIA, £1.375M SIPP
+      expenses: [createEmptyExpensesData({ totalExpenses: 80_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, ma, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'accumulation' });
+  });
+
+  it('transitions to retirement when SWR condition is met AND accessible funds can bridge to unlock age', () => {
+    // Same age and expenses, but GIA has enough to cover 17 pre-unlock years.
+    // Simulation (annuity-due: withdraw then earn): min GIA for 17yr × £80k at 6.8% ≈ £846k.
+    // GIA £860k > £846k minimum → simulation passes.
+    const timeline = createSwrTargetTimeline(6);
+    const state = createSimulationState({
+      age: 40,
+      portfolio: createSplitPortfolio(860_000, 800_000), // £860k GIA, £800k SIPP
+      expenses: [createEmptyExpensesData({ totalExpenses: 80_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, ma, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('skips liquidity check once past penaltyFreeAge', () => {
+    // age 58 > penaltyFreeAge 57 → no liquidity gate; total portfolio check is all that matters
+    // SWR 6%: portfolio £1.4M → £84k > £80k → retires (regardless of accessible split)
+    const timeline = createSwrTargetTimeline(6);
+    const state = createSimulationState({
+      age: 58,
+      portfolio: createSplitPortfolio(5_000, 1_395_000), // nearly all in SIPP, but age > 57
+      expenses: [createEmptyExpensesData({ totalExpenses: 80_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, ma, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('without countryConfig, no liquidity gate is applied — total-portfolio SWR check only', () => {
+    // Same split as first test (£25k GIA + £1.375M SIPP) but no countryConfig
+    // SWR passes → retires (no way to know SIPP is locked)
+    const timeline = createSwrTargetTimeline(6);
+    const state = createSimulationState({
+      age: 40,
+      portfolio: createSplitPortfolio(25_000, 1_375_000),
+      expenses: [createEmptyExpensesData({ totalExpenses: 80_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, ma);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('once retired, sticky — does not re-evaluate liquidity on subsequent calls', () => {
+    // Simulate already in retirement phase; liquidity check must not revert it
+    const timeline = createSwrTargetTimeline(6);
+    const state = createSimulationState({
+      age: 40,
+      phase: { name: 'retirement' },
+      portfolio: createSplitPortfolio(25_000, 1_375_000), // would fail liquidity if re-evaluated
+      expenses: [createEmptyExpensesData({ totalExpenses: 80_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, ma, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+});
+
+// ============================================================================
+// earliestPossible — Liquidity / Locked-Account Constraint Tests
+// ============================================================================
+
+describe('PhaseIdentifier - earliestPossible liquidity constraint (locked accounts)', () => {
+  // age 40, life expectancy 90 → 50 remaining years
+  // penaltyFreeAge 57 → 17 years until SIPP unlocks
+  // expenses £40k/year, real return ~6.8% (100% stocks: (1.10/1.03)-1)
+  // PV(40k, 50yr, 6.8%) ≈ 40k × (1-1.068^-50)/0.068 ≈ 40k × 14.15 ≈ £566k total needed
+  // PV(40k, 17yr, 6.8%) ≈ 40k × (1-1.068^-17)/0.068 ≈ 40k × 9.25 ≈ £370k accessible needed
+
+  const maAllStocks: MarketAssumptionsInputs = {
+    stockReturn: 10,
+    stockYield: 3.5,
+    bondReturn: 5,
+    bondYield: 4.5,
+    cashReturn: 3,
+    inflationRate: 3,
+  };
+
+  it('stays in accumulation when total portfolio is sufficient but accessible funds cannot bridge to unlock age', () => {
+    // Total £700k > £566k needed → passes check 1
+    // But accessible (GIA) = £100k < £370k pre-unlock needed → fails check 2
+    const timeline = createEarliestPossibleTimeline(90);
+    const state = createSimulationState({
+      age: 40,
+      portfolio: createSplitPortfolio(100_000, 600_000), // £100k GIA, £600k SIPP
+      expenses: [createEmptyExpensesData({ totalExpenses: 40_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, maAllStocks, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'accumulation' });
+  });
+
+  it('transitions to retirement when both total portfolio and accessible funds are sufficient', () => {
+    // age 40, penaltyFreeAge 57 → 17 years of GIA-only withdrawals before SIPP unlocks
+    // Simulation requires GIA ≥ £423k to sustain £40k/yr at 6.8% real for 17 years (annuity-due).
+    // £460k GIA clears this; SIPP covers the post-57 period comfortably.
+    const timeline = createEarliestPossibleTimeline(90);
+    const state = createSimulationState({
+      age: 40,
+      portfolio: createSplitPortfolio(460_000, 400_000), // £460k GIA, £400k SIPP
+      expenses: [createEmptyExpensesData({ totalExpenses: 40_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, maAllStocks, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('skips liquidity check once past penaltyFreeAge — uses total portfolio only', () => {
+    // age 60 > penaltyFreeAge 57: SIPP is now in the withdrawal order, so the full portfolio counts.
+    // Simulation PV_due(40k, 30yr, 6.8%) ≈ £541k. £705k total (£5k GIA + £700k SIPP) comfortably covers it.
+    // This illustrates that even with almost no accessible-only funds, retirement is feasible post-57.
+    const timeline = createEarliestPossibleTimeline(90);
+    const state = createSimulationState({
+      age: 60,
+      portfolio: createSplitPortfolio(5_000, 700_000), // tiny GIA, large SIPP — both accessible at 60
+      expenses: [createEmptyExpensesData({ totalExpenses: 40_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, maAllStocks, mockCountryConfig);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
+  });
+
+  it('without countryConfig falls back to total portfolio check only (no liquidity gate)', () => {
+    // Same split portfolio as first test — but no countryConfig, so check 2 is skipped
+    // Total £700k > £566k needed → retires despite locked funds
+    const timeline = createEarliestPossibleTimeline(90);
+    const state = createSimulationState({
+      age: 40,
+      portfolio: createSplitPortfolio(100_000, 600_000),
+      expenses: [createEmptyExpensesData({ totalExpenses: 40_000 })],
+    });
+    const phaseIdentifier = new PhaseIdentifier(state, timeline, maAllStocks);
+
+    expect(phaseIdentifier.getCurrentPhase()).toEqual({ name: 'retirement' });
   });
 });

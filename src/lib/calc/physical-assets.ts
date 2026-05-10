@@ -276,6 +276,10 @@ export class PhysicalAssets {
     return this.assets.filter((asset) => asset.getOwnershipStatus() === 'owned');
   }
 
+  getAssetsScheduledToSellAtRetirement(): PhysicalAsset[] {
+    return this.assets.filter((asset) => asset.isScheduledToSellAtRetirement());
+  }
+
   getAssetsToSellThisPeriod(simulationState: SimulationState): PhysicalAsset[] {
     return this.assets.filter((asset) => asset.shouldSellThisPeriod(simulationState));
   }
@@ -381,6 +385,14 @@ export class PhysicalAsset {
 
   isPaidOff(): boolean {
     return this.ownershipStatus === 'owned' && this.loanBalance <= 0;
+  }
+
+  isScheduledToSellAtRetirement(): boolean {
+    return this.ownershipStatus === 'owned' && this.saleDate?.type === 'atRetirement';
+  }
+
+  getMonthlyLoanPayment(): number {
+    return this.monthlyLoanPayment;
   }
 
   getOwnershipStatus(): OwnershipStatus {

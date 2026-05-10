@@ -90,12 +90,63 @@ export class FinancialSimulationEngine {
   constructor(protected readonly inputs: SimulatorInputs) {}
 
   /**
-   * Runs a complete financial simulation from start to end date
+   * Runs a complete financial simulation from start to end date.
+   *
+   * For the 'earliestPossible' strategy, automatically retries with a progressively later
+   * minimum retirement age when bankruptcy is detected before life expectancy. This corrects
+   * for cases where the feasibility check is overly optimistic (e.g. due to tax estimation
+   * approximations) so the returned result is always solvent or clearly impossible.
+   *
    * @param returnsProvider - Strategy for generating investment returns each year
    * @param timeline - User's timeline inputs (birth date, retirement, life expectancy)
    * @returns Complete simulation result with time-series data and context
    */
   runSimulation(returnsProvider: ReturnsProvider, timeline: TimelineInputs): SimulationResult {
+    if (timeline.retirementStrategy.type !== 'earliestPossible') {
+      return this.runSimulationCore(returnsProvider, timeline);
+    }
+
+    let minRetirementAge: number | undefined;
+    let result = this.runSimulationCore(returnsProvider, timeline, minRetirementAge);
+
+    // Retry with a later minimum retirement age until the plan is solvent or we reach life expectancy
+    while (true) {
+      const bankruptcyAge = this.detectBankruptcyDuringRetirement(result);
+      if (bankruptcyAge === null) break;
+
+      const retirementAge = this.getRetirementAgeFromResult(result);
+      if (retirementAge === null) break;
+
+      const nextMinAge = Math.floor(retirementAge) + 1;
+      if (nextMinAge >= timeline.lifeExpectancy) break;
+      if (minRetirementAge !== undefined && nextMinAge <= minRetirementAge) break;
+
+      minRetirementAge = nextMinAge;
+      result = this.runSimulationCore(returnsProvider, timeline, minRetirementAge);
+    }
+
+    return result;
+  }
+
+  /** Returns the age at which the portfolio first hits zero during retirement, or null if solvent. */
+  private detectBankruptcyDuringRetirement(result: SimulationResult): number | null {
+    let inRetirement = false;
+    for (const point of result.data) {
+      if (point.phase?.name === 'retirement') inRetirement = true;
+      if (inRetirement && point.portfolio.totalValue <= 0.01) return point.age;
+    }
+    return null;
+  }
+
+  /** Returns the age at which the simulation first entered retirement, or null. */
+  private getRetirementAgeFromResult(result: SimulationResult): number | null {
+    for (const point of result.data) {
+      if (point.phase?.name === 'retirement') return point.age;
+    }
+    return null;
+  }
+
+  private runSimulationCore(returnsProvider: ReturnsProvider, timeline: TimelineInputs, minRetirementAge?: number): SimulationResult {
     const countryConfig = getCountryConfig(this.inputs.country);
 
     // Init context and state
@@ -131,7 +182,17 @@ export class FinancialSimulationEngine {
     const taxProcessor = new TaxProcessor(simulationState, this.inputs.taxSettings.filingStatus, countryConfig);
 
     // Init phase identifier
-    const phaseIdentifier = new PhaseIdentifier(simulationState, timeline);
+    const phaseIdentifier = new PhaseIdentifier(
+      simulationState,
+      timeline,
+      this.inputs.marketAssumptions,
+      countryConfig,
+      physicalAssets,
+      Object.values(this.inputs.expenses),
+      Object.values(this.inputs.incomes),
+      this.inputs.glidePath,
+      minRetirementAge
+    );
     simulationState.phase = phaseIdentifier.getCurrentPhase();
 
     while (simulationState.time.date < simulationContext.endDate) {

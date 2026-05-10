@@ -8,6 +8,7 @@ export const contributionRulesValidator = v.object({
   amount: v.union(
     v.object({ type: v.literal('dollarAmount'), dollarAmount: v.number() }),
     v.object({ type: v.literal('percentRemaining'), percentRemaining: v.number() }),
+    v.object({ type: v.literal('percentOfIncome'), percentOfIncome: v.number() }),
     v.object({ type: v.literal('unlimited') })
   ),
   disabled: v.boolean(),

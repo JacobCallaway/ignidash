@@ -52,6 +52,12 @@ export const contributionFormSchema = z
 
     z.object({
       ...sharedContributionSchema.shape,
+      contributionType: z.literal('percentOfIncome'),
+      percentOfIncome: percentageField(0, 100, 'Percentage of income'),
+    }),
+
+    z.object({
+      ...sharedContributionSchema.shape,
       contributionType: z.literal('unlimited'),
     }),
   ])

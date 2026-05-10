@@ -154,8 +154,9 @@ export class SimulationDataExtractor {
         yearsToRetirement = retirementAge - Math.floor(startAge);
       }
 
-      // Portfolio below $0.10 is treated as bankrupt (accounts for floating-point residuals)
-      if (dp.portfolio.totalValue <= 0.1 && bankruptcyAge === null) {
+      // Portfolio below $0.10 is treated as bankrupt (accounts for floating-point residuals).
+      // Skip the starting year so a $0 initial portfolio doesn't immediately trigger bankruptcy.
+      if (dp.portfolio.totalValue <= 0.1 && bankruptcyAge === null && Math.floor(dp.age) !== Math.floor(startAge)) {
         bankruptcyAge = Math.floor(dp.age);
         yearsToBankruptcy = bankruptcyAge - Math.floor(startAge);
       }
@@ -635,7 +636,7 @@ export class SimulationDataExtractor {
     for (const [, sim] of simulations.simulations) {
       const phaseName = sim.data[year].phase?.name;
 
-      if (sim.data[year].portfolio.totalValue <= 0.1) {
+      if (year > 0 && sim.data[year].portfolio.totalValue <= 0.1) {
         numberBankrupt++;
       } else if (!phaseName || phaseName === 'accumulation') {
         numberAccumulation++;

@@ -69,6 +69,8 @@ export function contributionFromConvex(contribution: Doc<'plans'>['contributionR
       return { ...base, contributionType: 'dollarAmount', dollarAmount: contribution.amount.dollarAmount };
     case 'percentRemaining':
       return { ...base, contributionType: 'percentRemaining', percentRemaining: contribution.amount.percentRemaining };
+    case 'percentOfIncome':
+      return { ...base, contributionType: 'percentOfIncome', percentOfIncome: contribution.amount.percentOfIncome };
     case 'unlimited':
       return { ...base, contributionType: 'unlimited' };
   }
@@ -241,6 +243,8 @@ export function contributionToConvex(contribution: ContributionInputs): Doc<'pla
       return { ...base, amount: { type: 'dollarAmount', dollarAmount: contribution.dollarAmount } };
     case 'percentRemaining':
       return { ...base, amount: { type: 'percentRemaining', percentRemaining: contribution.percentRemaining } };
+    case 'percentOfIncome':
+      return { ...base, amount: { type: 'percentOfIncome', percentOfIncome: contribution.percentOfIncome } };
     case 'unlimited':
       return { ...base, amount: { type: 'unlimited' } };
   }

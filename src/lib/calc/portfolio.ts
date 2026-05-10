@@ -117,7 +117,7 @@ export class PortfolioProcessor {
       employerMatch,
       employerMatchByAccount,
       shortfallRepaid,
-    } = this.processContributions(netCashFlow, incomesData);
+    } = this.processContributions(netCashFlow, incomesData, physicalAssetSaleProceeds);
 
     const {
       total: withdrawals,
@@ -244,7 +244,8 @@ export class PortfolioProcessor {
 
   private processContributions(
     netCashFlow: number,
-    incomesData: IncomesData | null
+    incomesData: IncomesData | null,
+    physicalAssetSaleProceeds = 0
   ): FlowsData & {
     discretionaryExpense: number;
     employerMatch: number;
@@ -273,47 +274,58 @@ export class PortfolioProcessor {
 
     type AccountEntry = { kind: 'account'; rule: import('./contribution-rules').ContributionRule };
     type DebtEntry = { kind: 'debt'; rule: import('./contribution-rules').DebtContributionRule };
-    const allRules: (AccountEntry | DebtEntry)[] = [
-      ...this.contributionRules.getRules().map((rule) => ({ kind: 'account' as const, rule })),
-      ...this.contributionRules.getDebtRules().map((rule) => ({ kind: 'debt' as const, rule })),
-    ].sort((a, b) => a.rule.getRank() - b.rule.getRank());
+    const allAccountRules: AccountEntry[] = this.contributionRules.getRules().map((rule) => ({ kind: 'account' as const, rule }));
+    const allDebtRules: DebtEntry[] = this.contributionRules.getDebtRules().map((rule) => ({ kind: 'debt' as const, rule }));
+
+    // percentOfIncome rules model salary sacrifice: deducted from gross pay before the surplus waterfall,
+    // so their amount is independent of rule rank order.
+    const [salaryDeferralRules, surplusRules] = [
+      allAccountRules.filter((e) => e.rule.isPercentOfIncomeType()),
+      [...allAccountRules.filter((e) => !e.rule.isPercentOfIncomeType()), ...allDebtRules].sort(
+        (a, b) => a.rule.getRank() - b.rule.getRank()
+      ),
+    ];
 
     let employerMatch = 0;
     let remainingToContribute = netCashFlow - shortfallRepaid;
 
-    for (const entry of allRules) {
+    const applyAccountContribution = (rule: import('./contribution-rules').ContributionRule, surplusCap: number) => {
+      const contributeToAccountID = rule.getAccountID();
+      const contributeToAccount = this.simulationState.portfolio.getAccountById(contributeToAccountID);
+      if (!contributeToAccount) {
+        console.warn(`Contribution rule references non-existent account ID: ${contributeToAccountID}`);
+        return;
+      }
+
+      const { contributionAmount, employerMatchAmount } = rule.calculateContribution(surplusCap, contributeToAccount, age, incomesData);
+      if (contributionAmount <= 0 && employerMatchAmount <= 0) return;
+
+      const contributionAllocation = this.getAllocationForContribution(contributionAmount + employerMatchAmount);
+      const contributedAssets = contributeToAccount.applyContribution(contributionAmount, 'self', contributionAllocation);
+      byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID] ?? zeroFlows(), contributedAssets);
+
+      if (employerMatchAmount > 0) {
+        const matchedAssets = contributeToAccount.applyContribution(employerMatchAmount, 'employer', contributionAllocation);
+        byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID], matchedAssets);
+      }
+
+      employerMatchByAccount[contributeToAccountID] = (employerMatchByAccount[contributeToAccountID] ?? 0) + employerMatchAmount;
+      employerMatch += employerMatchAmount;
+      rule.recordContribution(contributionAmount, employerMatchAmount, contributeToAccount.getAccountType());
+      remainingToContribute -= contributionAmount;
+    };
+
+    // First pass: salary deferral rules (percentOfIncome) — bypass the surplus cap
+    for (const entry of salaryDeferralRules) {
+      applyAccountContribution(entry.rule, Infinity);
+    }
+
+    // Second pass: surplus-based rules in rank order
+    for (const entry of surplusRules) {
       if (remainingToContribute <= 0) break;
 
       if (entry.kind === 'account') {
-        const rule = entry.rule;
-        const contributeToAccountID = rule.getAccountID();
-        const contributeToAccount = this.simulationState.portfolio.getAccountById(contributeToAccountID);
-        if (!contributeToAccount) {
-          console.warn(`Contribution rule references non-existent account ID: ${contributeToAccountID}`);
-          continue;
-        }
-
-        const { contributionAmount, employerMatchAmount } = rule.calculateContribution(
-          remainingToContribute,
-          contributeToAccount,
-          age,
-          incomesData
-        );
-        if (contributionAmount <= 0) continue;
-
-        const contributionAllocation = this.getAllocationForContribution(contributionAmount + employerMatchAmount);
-        const contributedAssets = contributeToAccount.applyContribution(contributionAmount, 'self', contributionAllocation);
-        byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID] ?? zeroFlows(), contributedAssets);
-
-        if (employerMatchAmount > 0) {
-          const matchedAssets = contributeToAccount.applyContribution(employerMatchAmount, 'employer', contributionAllocation);
-          byAccount[contributeToAccountID] = addFlows(byAccount[contributeToAccountID], matchedAssets);
-        }
-
-        employerMatchByAccount[contributeToAccountID] = (employerMatchByAccount[contributeToAccountID] ?? 0) + employerMatchAmount;
-        employerMatch += employerMatchAmount;
-        rule.recordContribution(contributionAmount, employerMatchAmount, contributeToAccount.getAccountType());
-        remainingToContribute -= contributionAmount;
+        applyAccountContribution(entry.rule, remainingToContribute);
       } else {
         if (!this.debts) continue;
         const rule = entry.rule;
@@ -330,6 +342,28 @@ export class PortfolioProcessor {
       }
     }
 
+    const saveToExtraSavings = (amount: number) => {
+      const portfolioHasExtraSavingsAccount = this.simulationState.portfolio
+        .getAccounts()
+        .some((account) => account.getAccountID() === this.extraSavingsAccount.getAccountID());
+      if (!portfolioHasExtraSavingsAccount) {
+        this.simulationState.portfolio.addExtraSavingsAccount(this.extraSavingsAccount);
+      }
+      const contributionAllocation = this.getAllocationForContribution(amount);
+      const extraContributed = this.extraSavingsAccount.applyContribution(amount, 'self', contributionAllocation);
+      byAccount[this.extraSavingsAccount.getAccountID()] = addFlows(
+        byAccount[this.extraSavingsAccount.getAccountID()] ?? zeroFlows(),
+        extraContributed
+      );
+      remainingToContribute -= amount;
+    };
+
+    // Sale proceeds that survived the ranked waterfall are always saved — never discretionary spending.
+    const saleProceedsRemaining = Math.min(physicalAssetSaleProceeds, remainingToContribute);
+    if (saleProceedsRemaining > 0) {
+      saveToExtraSavings(saleProceedsRemaining);
+    }
+
     let discretionaryExpense = 0;
     if (remainingToContribute > 0) {
       const baseRule = this.contributionRules.getBaseRuleType();
@@ -338,21 +372,7 @@ export class PortfolioProcessor {
           discretionaryExpense = remainingToContribute;
           break;
         case 'save':
-          const portfolioHasExtraSavingsAccount = this.simulationState.portfolio
-            .getAccounts()
-            .some((account) => account.getAccountID() === this.extraSavingsAccount.getAccountID());
-          if (!portfolioHasExtraSavingsAccount) {
-            this.simulationState.portfolio.addExtraSavingsAccount(this.extraSavingsAccount);
-          }
-
-          const contributionAllocation = this.getAllocationForContribution(remainingToContribute);
-          const extraContributed = this.extraSavingsAccount.applyContribution(remainingToContribute, 'self', contributionAllocation);
-          byAccount[this.extraSavingsAccount.getAccountID()] = addFlows(
-            byAccount[this.extraSavingsAccount.getAccountID()] ?? zeroFlows(),
-            extraContributed
-          );
-
-          remainingToContribute = 0;
+          saveToExtraSavings(remainingToContribute);
           break;
       }
     }
