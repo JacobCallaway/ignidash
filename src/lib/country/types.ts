@@ -112,6 +112,8 @@ export interface WithdrawalOrderItem {
 export interface CountryConfig {
   code: string;
   name: string;
+  /** Display label for income/federal/national tax in charts and UI (e.g. "Federal Income Tax", "Income Tax") */
+  incomeTaxLabel: string;
   currency: {
     code: string;
     symbol: string;

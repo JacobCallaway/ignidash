@@ -3,6 +3,7 @@ import type { CountryConfig } from '../types';
 export const usConfig: CountryConfig = {
   code: 'US',
   name: 'United States',
+  incomeTaxLabel: 'Federal Income Tax',
   currency: { code: 'USD', symbol: '$', locale: 'en-US' },
 
   filingStatuses: [

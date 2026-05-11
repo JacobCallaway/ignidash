@@ -50,6 +50,7 @@ const createSplitPortfolio = (accessibleValue: number, lockedValue: number): Por
 const mockCountryConfig: CountryConfig = {
   code: 'GB',
   name: 'United Kingdom',
+  incomeTaxLabel: 'Income Tax',
   currency: { code: 'GBP', symbol: '£', locale: 'en-GB' },
   filingStatuses: [],
   incomeTax: {},

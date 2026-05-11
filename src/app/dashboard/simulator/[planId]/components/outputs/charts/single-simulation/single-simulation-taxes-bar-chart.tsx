@@ -5,6 +5,7 @@ import { BarChart, Bar, ResponsiveContainer, Cell, ReferenceLine, LabelList } fr
 import { formatCompactCurrency, formatPercentage } from '@/lib/utils/number-formatters';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useChartTheme } from '@/hooks/use-chart-theme';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import type { FederalIncomeTaxBracket } from '@/lib/calc/tax-data/federal-income-tax-brackets';
 import type { CapitalGainsTaxBracket } from '@/lib/calc/tax-data/capital-gains-tax-brackets';
 import { NIIT_RATE } from '@/lib/calc/tax-data/niit-thresholds';
@@ -123,31 +124,36 @@ export default function SingleSimulationTaxesBarChart({
 }: SingleSimulationTaxesBarChartProps) {
   const { foregroundColor, foregroundMutedColor } = useChartTheme();
   const isSmallScreen = useIsMobile();
+  const countryConfig = useCountryConfig();
+
+  const socialSecurityLabel = countryConfig.incomeTypes.find((t) => t.isSocialSecurityLike)?.label ?? 'Social Security';
+  const incomeTaxLabel = countryConfig.incomeTaxLabel;
+  const payrollTaxLabel = countryConfig.payrollTax?.label ?? 'Payroll Tax';
 
   const labelConfig: Record<string, { mobile: string[]; desktop: string[] }> = {
     marginalRates: {
-      mobile: ['Fed. Income Rate', 'Cap Gains Rate'],
-      desktop: ['Top Marginal Fed. Income Tax Rate', 'Top Marginal Cap Gains Tax Rate'],
+      mobile: [`${incomeTaxLabel} Rate`, 'Cap Gains Rate'],
+      desktop: [`Top Marginal ${incomeTaxLabel} Rate`, 'Top Marginal Cap Gains Tax Rate'],
     },
     effectiveRates: {
-      mobile: ['Fed. Income Rate', 'Cap Gains Rate'],
-      desktop: ['Effective Fed. Income Tax Rate', 'Effective Cap Gains Tax Rate'],
+      mobile: [`${incomeTaxLabel} Rate`, 'Cap Gains Rate'],
+      desktop: [`Effective ${incomeTaxLabel} Rate`, 'Effective Cap Gains Tax Rate'],
     },
     annualAmounts: {
-      mobile: ['Fed. Income Tax', 'FICA Tax', 'Cap Gains Tax', 'NIIT', 'EW Penalty'],
-      desktop: ['Annual Fed. Income Tax', 'Annual FICA Tax', 'Annual Cap Gains Tax', 'Annual NIIT', 'Annual EW Penalties'],
+      mobile: [incomeTaxLabel, `${payrollTaxLabel} Tax`, 'Cap Gains Tax', 'NIIT', 'EW Penalty'],
+      desktop: [`Annual ${incomeTaxLabel}`, `Annual ${payrollTaxLabel} Tax`, 'Annual Cap Gains Tax', 'Annual NIIT', 'Annual EW Penalties'],
     },
     cumulativeAmounts: {
-      mobile: ['Cumul. Fed. Income Tax', 'Cumul. FICA Tax', 'Cumul. CG Tax', 'Cumul. NIIT', 'Cumul. EW Penalty'],
-      desktop: ['Cumul. Fed. Income Tax', 'Cumul. FICA Tax', 'Cumul. Cap Gains Tax', 'Cumul. NIIT', 'Cumul. EW Penalties'],
+      mobile: [`Cumul. ${incomeTaxLabel}`, `Cumul. ${payrollTaxLabel}`, 'Cumul. CG Tax', 'Cumul. NIIT', 'Cumul. EW Penalty'],
+      desktop: [`Cumul. ${incomeTaxLabel}`, `Cumul. ${payrollTaxLabel} Tax`, 'Cumul. Cap Gains Tax', 'Cumul. NIIT', 'Cumul. EW Penalties'],
     },
     retirementDistributions: {
       mobile: ['Tax-Deferred', 'Early Roth'],
       desktop: ['Tax-Deferred Withdrawals', 'Early Roth Earnings Withdrawals'],
     },
     ordinaryIncome: {
-      mobile: ['Earned Income', 'Soc. Sec.', 'Interest Income', 'Retirement Dist.'],
-      desktop: ['Earned Income', 'Social Security', 'Interest Income', 'Retirement Distributions'],
+      mobile: ['Earned Income', socialSecurityLabel, 'Interest Income', 'Retirement Dist.'],
+      desktop: ['Earned Income', socialSecurityLabel, 'Interest Income', 'Retirement Distributions'],
     },
     earlyWithdrawalPenalties: {
       mobile: ['Annual EW Penalty', 'Cumul. EW Penalty'],
@@ -158,8 +164,8 @@ export default function SingleSimulationTaxesBarChart({
       desktop: ['Tax-Deductible Contributions', 'Capital Loss Deduction', 'Standard Deduction'],
     },
     socialSecurityIncome: {
-      mobile: ['Soc. Sec.', 'Taxable Soc. Sec.'],
-      desktop: ['Social Security', 'Taxable Social Security'],
+      mobile: [socialSecurityLabel, `Taxable ${socialSecurityLabel}`],
+      desktop: [socialSecurityLabel, `Taxable ${socialSecurityLabel}`],
     },
   };
 

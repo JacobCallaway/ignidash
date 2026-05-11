@@ -13,6 +13,7 @@ import { Subheading } from '@/components/catalyst/heading';
 import { SimulationDataExtractor } from '@/lib/calc/data-extractors/simulation-data-extractor';
 import { sumFlows, zeroAssetAmounts, type AssetReturnAmounts, type AssetAllocation } from '@/lib/calc/asset';
 import { useSingleSimulationCategory } from '@/lib/stores/simulator-store';
+import { useCountryConfig } from '@/hooks/use-country-config';
 
 function NetPortfolioChangeTooltip() {
   return (
@@ -29,13 +30,15 @@ function NetPortfolioChangeTooltip() {
 }
 
 function SurplusDeficitTooltip() {
+  const countryConfig = useCountryConfig();
+  const socialSecurityLabel = countryConfig.incomeTypes.find((t) => t.isSocialSecurityLike)?.label ?? 'Social Security';
   return (
     <Tooltip>
       <TooltipTrigger>
         <InfoIcon className="size-4 fill-white dark:fill-stone-950" />
       </TooltipTrigger>
       <TooltipContent>
-        <p>Income (wages, tax-free, and Social Security) minus expenses, taxes, and debt payments.</p>
+        <p>Income (wages, tax-free, and {socialSecurityLabel}) minus expenses, taxes, and debt payments.</p>
         <p>
           <strong>Positive</strong> = cash available to save or invest. <strong>Negative</strong> = portfolio withdrawals needed to cover
           the gap.
@@ -91,13 +94,18 @@ function GrossIncomeTooltip() {
 }
 
 function TotalIncomeTooltip() {
+  const countryConfig = useCountryConfig();
+  const socialSecurityLabel = countryConfig.incomeTypes.find((t) => t.isSocialSecurityLike)?.label ?? null;
   return (
     <Tooltip>
       <TooltipTrigger>
         <InfoIcon className="size-4 fill-white dark:fill-stone-950" />
       </TooltipTrigger>
       <TooltipContent>
-        <p>Gross income plus tax-free income (gifts, inheritances, etc.) and the non-taxable portion of Social Security.</p>
+        <p>
+          Gross income plus tax-free income (gifts, inheritances, etc.)
+          {socialSecurityLabel && ` and the non-taxable portion of ${socialSecurityLabel}`}.
+        </p>
       </TooltipContent>
     </Tooltip>
   );

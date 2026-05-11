@@ -5,6 +5,7 @@ import type { SingleSimulationTaxesChartDataPoint } from '@/lib/types/chart-data
 import type { TaxesDataView } from '@/lib/types/chart-data-views';
 import { useShowReferenceLines } from '@/lib/stores/simulator-store';
 import type { KeyMetrics } from '@/lib/types/key-metrics';
+import { useCountryConfig } from '@/hooks/use-country-config';
 
 import SingleSimulationTaxesLineChart from '../../charts/single-simulation/single-simulation-taxes-line-chart';
 import ChartTimeFrameDropdown from '../../chart-time-frame-dropdown';
@@ -30,6 +31,8 @@ export default function SingleSimulationTaxesLineChartCard({
   startAge,
 }: SingleSimulationTaxesLineChartCardProps) {
   const showReferenceLines = useShowReferenceLines();
+  const countryConfig = useCountryConfig();
+  const socialSecurityLabel = countryConfig.incomeTypes.find((t) => t.isSocialSecurityLike)?.label ?? null;
 
   return (
     <ChartCard
@@ -69,10 +72,12 @@ export default function SingleSimulationTaxesLineChartCard({
             <optgroup label="Issues & Penalties">
               <option value="earlyWithdrawalPenalties">Early Withdrawal Penalties</option>
             </optgroup>
-            <optgroup label="Social Security">
-              <option value="socialSecurityIncome">Social Security Income</option>
-              <option value="socialSecurityTaxablePercentage">Taxable % of Social Security</option>
-            </optgroup>
+            {socialSecurityLabel && (
+              <optgroup label={socialSecurityLabel}>
+                <option value="socialSecurityIncome">{socialSecurityLabel} Income</option>
+                <option value="socialSecurityTaxablePercentage">Taxable % of {socialSecurityLabel}</option>
+              </optgroup>
+            )}
           </Select>
           <ChartTimeFrameDropdown timeFrameType="single" />
         </>

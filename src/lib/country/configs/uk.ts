@@ -3,6 +3,7 @@ import type { CountryConfig } from '../types';
 export const ukConfig: CountryConfig = {
   code: 'GB',
   name: 'United Kingdom',
+  incomeTaxLabel: 'Income Tax',
   currency: { code: 'GBP', symbol: '£', locale: 'en-GB' },
 
   filingStatuses: [{ id: 'individual', label: 'Individual' }],
