@@ -18,6 +18,7 @@ import { Fieldset, FieldGroup, Field, Label, ErrorMessage, Description } from '@
 import ErrorMessageCard from '@/components/ui/error-message-card';
 import { Combobox, ComboboxLabel, ComboboxOption } from '@/components/catalyst/combobox';
 import { Select } from '@/components/catalyst/select';
+import { Switch, SwitchField, SwitchGroup } from '@/components/catalyst/switch';
 import { Divider } from '@/components/catalyst/divider';
 import { Button } from '@/components/catalyst/button';
 import { DialogActions } from '@/components/catalyst/dialog';
@@ -65,6 +66,7 @@ interface TimelineDrawerProps {
 
 export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProps) {
   const planId = useSelectedPlanId();
+  const [hasSpouse, setHasSpouse] = useState(() => timeline?.spouseBirthYear !== undefined);
 
   const timelineDefaultValues = useMemo(
     () =>
@@ -121,6 +123,15 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
       unregister('retirementStrategy.retirementAge');
     }
   }, [retirementStrategyType, unregister]);
+
+  const handleSpouseToggle = (checked: boolean) => {
+    setHasSpouse(checked);
+    if (!checked) {
+      unregister('spouseBirthMonth');
+      unregister('spouseBirthYear');
+      unregister('spouseLifeExpectancy');
+    }
+  };
 
   const months = [
     { value: 1, name: 'January' },
@@ -252,6 +263,80 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
                   </Field>
                 )}
                 <Divider />
+                <SwitchGroup>
+                  <SwitchField>
+                    <Label>Planning as a couple?</Label>
+                    <Description>Add a spouse to enable per-person contribution limits and age-based catch-up tiers.</Description>
+                    <Switch checked={hasSpouse} onChange={handleSpouseToggle} />
+                  </SwitchField>
+                </SwitchGroup>
+                {hasSpouse && (
+                  <>
+                    <div className="grid grid-cols-2 items-end gap-x-4">
+                      <Field>
+                        <Label>Spouse Birth Month</Label>
+                        <Controller
+                          name="spouseBirthMonth"
+                          defaultValue={currentMonth.value}
+                          control={control}
+                          render={({ field: { onChange, value, name } }) => (
+                            <Combobox
+                              name={name}
+                              options={months}
+                              displayValue={(month) => month?.name || currentMonth.name}
+                              value={months.find((m) => m.value === value) || currentMonth}
+                              onChange={(month) => onChange(month?.value || currentMonth.value)}
+                              filter={(month, query) =>
+                                month.name.toLowerCase().includes(query.toLowerCase()) || String(month.value).includes(query)
+                              }
+                            >
+                              {(month) => (
+                                <ComboboxOption value={month}>
+                                  <ComboboxLabel>{month.name}</ComboboxLabel>
+                                </ComboboxOption>
+                              )}
+                            </Combobox>
+                          )}
+                        />
+                      </Field>
+                      <Field>
+                        <Label>Spouse Birth Year</Label>
+                        <Controller
+                          name="spouseBirthYear"
+                          defaultValue={currentYear}
+                          control={control}
+                          render={({ field: { onChange, value, name } }) => (
+                            <Combobox
+                              name={name}
+                              options={years}
+                              displayValue={(year) => String(year || currentYear)}
+                              value={value || currentYear}
+                              onChange={(year) => onChange(year || currentYear)}
+                            >
+                              {(year) => (
+                                <ComboboxOption value={year}>
+                                  <ComboboxLabel>{year}</ComboboxLabel>
+                                </ComboboxOption>
+                              )}
+                            </Combobox>
+                          )}
+                        />
+                        {errors.spouseBirthYear && <ErrorMessage>{errors.spouseBirthYear.message}</ErrorMessage>}
+                      </Field>
+                    </div>
+                    <Field>
+                      <Label htmlFor="spouseLifeExpectancy">Spouse Life Expectancy</Label>
+                      <NumberInput
+                        name="spouseLifeExpectancy"
+                        control={control}
+                        id="spouseLifeExpectancy"
+                        inputMode="numeric"
+                        placeholder="85"
+                      />
+                      {errors.spouseLifeExpectancy && <ErrorMessage>{errors.spouseLifeExpectancy.message}</ErrorMessage>}
+                    </Field>
+                  </>
+                )}
               </FieldGroup>
             </Fieldset>
             <DialogActions>

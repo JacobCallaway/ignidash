@@ -157,23 +157,82 @@ export class TaxProcessor {
     };
 
     const standardDeduction = this.getStandardDeduction();
-    const deductionUsedForOrdinary = Math.min(standardDeduction, incomeData.adjustedIncomeTaxedAsOrdinary);
-    const deductionUsedForGains = standardDeduction - deductionUsedForOrdinary;
+    const hasSpouse = this.simulationState.spouseAge !== undefined;
 
-    const taxableIncomeTaxedAsOrdinary = Math.max(0, incomeData.adjustedIncomeTaxedAsOrdinary - deductionUsedForOrdinary);
-    const taxableIncomeTaxedAsCapitalGains = Math.max(0, incomeData.adjustedIncomeTaxedAsCapitalGains - deductionUsedForGains);
+    let taxableIncomeTaxedAsOrdinary: number;
+    let taxableIncomeTaxedAsCapitalGains: number;
+    let federalIncomeTaxes: FederalIncomeTaxesData;
 
-    const { federalIncomeTaxAmount, topMarginalFederalIncomeTaxRate, federalIncomeTaxBrackets } = this.processIncomeTaxes({
-      taxableIncomeTaxedAsOrdinary,
-    });
-    const federalIncomeTaxes: FederalIncomeTaxesData = {
-      taxableIncomeTaxedAsOrdinary,
-      federalIncomeTaxAmount,
-      effectiveFederalIncomeTaxRate: incomeData.totalIncome > 0 ? federalIncomeTaxAmount / incomeData.totalIncome : 0,
-      topMarginalFederalIncomeTaxRate,
-      federalIncomeTaxBrackets,
-      capitalLossDeduction: incomeData.capitalLossDeduction !== 0 ? incomeData.capitalLossDeduction : undefined,
-    };
+    if (hasSpouse) {
+      // Per-owner split: spouse earned income derived from annualIncomesData; primary gets the rest
+      const spouseSS = this.countryConfig.socialSecurityTax ? (annualIncomesData.spouseTotalSocialSecurityIncome ?? 0) : 0;
+      const spouseTaxFree = annualIncomesData.spouseTotalTaxFreeIncome ?? 0;
+      const spouseEarned = (annualIncomesData.spouseTotalIncome ?? 0) - spouseSS - spouseTaxFree;
+      const primaryEarned = incomeData.earnedIncome - spouseEarned;
+
+      // Split taxable SS proportionally by each owner's share of total SS
+      const totalSS = incomeData.socialSecurityIncome;
+      const spouseSSFraction = totalSS > 0 ? spouseSS / totalSS : 0;
+      const spouseTaxableSS = incomeData.taxableSocialSecurityIncome * spouseSSFraction;
+      const primaryTaxableSS = incomeData.taxableSocialSecurityIncome - spouseTaxableSS;
+
+      // Primary gets: their earned income + all portfolio income (retirement, interest) + adjustments
+      const primaryRawOrdinary =
+        primaryEarned + incomeData.taxableRetirementDistributions + incomeData.taxableInterestIncome + primaryTaxableSS;
+      const primaryAdjustedOrdinary = Math.max(
+        0,
+        primaryRawOrdinary - incomeData.taxDeductibleContributions - incomeData.capitalLossDeduction
+      );
+
+      // Spouse gets: their earned income + their SS (no portfolio income or adjustments)
+      const spouseAdjustedOrdinary = spouseEarned + spouseTaxableSS;
+
+      // Each owner gets half the standard deduction (preserves correct total for joint filers)
+      const perOwnerDeduction = standardDeduction / 2;
+      const primaryDeductionUsed = Math.min(perOwnerDeduction, primaryAdjustedOrdinary);
+      const spouseDeductionUsed = Math.min(perOwnerDeduction, spouseAdjustedOrdinary);
+      const totalDeductionUsedForOrdinary = primaryDeductionUsed + spouseDeductionUsed;
+
+      const primaryTaxableOrdinary = primaryAdjustedOrdinary - primaryDeductionUsed;
+      const spouseTaxableOrdinary = spouseAdjustedOrdinary - spouseDeductionUsed;
+      taxableIncomeTaxedAsOrdinary = primaryTaxableOrdinary + spouseTaxableOrdinary;
+
+      const deductionRemainingForGains = standardDeduction - totalDeductionUsedForOrdinary;
+      taxableIncomeTaxedAsCapitalGains = Math.max(0, incomeData.adjustedIncomeTaxedAsCapitalGains - deductionRemainingForGains);
+
+      const primaryResult = this.processIncomeTaxes({ taxableIncomeTaxedAsOrdinary: primaryTaxableOrdinary });
+      const spouseResult = this.processIncomeTaxes({ taxableIncomeTaxedAsOrdinary: spouseTaxableOrdinary });
+      const combinedFederalIncomeTaxAmount = primaryResult.federalIncomeTaxAmount + spouseResult.federalIncomeTaxAmount;
+
+      federalIncomeTaxes = {
+        taxableIncomeTaxedAsOrdinary,
+        federalIncomeTaxAmount: combinedFederalIncomeTaxAmount,
+        effectiveFederalIncomeTaxRate: incomeData.totalIncome > 0 ? combinedFederalIncomeTaxAmount / incomeData.totalIncome : 0,
+        topMarginalFederalIncomeTaxRate: Math.max(
+          primaryResult.topMarginalFederalIncomeTaxRate,
+          spouseResult.topMarginalFederalIncomeTaxRate
+        ),
+        federalIncomeTaxBrackets: primaryResult.federalIncomeTaxBrackets,
+        capitalLossDeduction: incomeData.capitalLossDeduction !== 0 ? incomeData.capitalLossDeduction : undefined,
+      };
+    } else {
+      const deductionUsedForOrdinary = Math.min(standardDeduction, incomeData.adjustedIncomeTaxedAsOrdinary);
+      const deductionUsedForGains = standardDeduction - deductionUsedForOrdinary;
+      taxableIncomeTaxedAsOrdinary = Math.max(0, incomeData.adjustedIncomeTaxedAsOrdinary - deductionUsedForOrdinary);
+      taxableIncomeTaxedAsCapitalGains = Math.max(0, incomeData.adjustedIncomeTaxedAsCapitalGains - deductionUsedForGains);
+
+      const { federalIncomeTaxAmount, topMarginalFederalIncomeTaxRate, federalIncomeTaxBrackets } = this.processIncomeTaxes({
+        taxableIncomeTaxedAsOrdinary,
+      });
+      federalIncomeTaxes = {
+        taxableIncomeTaxedAsOrdinary,
+        federalIncomeTaxAmount,
+        effectiveFederalIncomeTaxRate: incomeData.totalIncome > 0 ? federalIncomeTaxAmount / incomeData.totalIncome : 0,
+        topMarginalFederalIncomeTaxRate,
+        federalIncomeTaxBrackets,
+        capitalLossDeduction: incomeData.capitalLossDeduction !== 0 ? incomeData.capitalLossDeduction : undefined,
+      };
+    }
 
     const { capitalGainsTaxAmount, topMarginalCapitalGainsTaxRate, capitalGainsTaxBrackets } = this.processCapitalGainsTaxes({
       taxableIncomeTaxedAsCapitalGains,

@@ -53,6 +53,7 @@ export interface AccountDataWithFlows extends AccountData {
 /** Base class for all account types with shared cumulative tracking */
 export abstract class Account {
   abstract readonly taxCategory: TaxCategory;
+  protected owner: 'primary' | 'spouse' = 'primary';
 
   constructor(
     protected balance: number,
@@ -83,6 +84,10 @@ export abstract class Account {
 
   getAccountType(): AccountInputs['type'] {
     return this.type;
+  }
+
+  getOwner(): 'primary' | 'spouse' {
+    return this.owner;
   }
 
   getCumulativeReturnAmounts(): AssetReturnAmounts {
@@ -153,6 +158,7 @@ export class SavingsAccount extends Account {
       0,
       cumulativeYieldAmounts
     );
+    this.owner = data.owner ?? 'primary';
   }
 
   getHasRMDs(): boolean {
@@ -249,6 +255,7 @@ export abstract class InvestmentAccount extends Account {
       0,
       cumulativeYieldAmounts
     );
+    this.owner = data.owner ?? 'primary';
     this.hasRmd = hasRmd;
     this.currPercentBonds = (data.percentBonds ?? 0) / 100;
   }

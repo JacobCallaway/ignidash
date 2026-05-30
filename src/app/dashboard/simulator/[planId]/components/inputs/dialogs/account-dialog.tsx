@@ -35,6 +35,7 @@ import { getCurrencySymbol, formatCurrencyPlaceholder } from '@/lib/utils/number
 import type { CountryConfig } from '@/lib/country/types';
 import { getAccountTypeConfig } from '@/lib/country';
 
+import { useTimelineData } from '@/hooks/use-convex-data';
 import SyncWithNetWorthTrackerSelect from './sync-with-nw-tracker-select';
 
 const TAX_CATEGORY_LABELS: Record<string, string> = {
@@ -150,9 +151,13 @@ export default function AccountDialog({
     setValue('name', asset.name);
   };
 
+  const timeline = useTimelineData();
+  const hasSpouse = timeline?.spouseBirthYear !== undefined;
+
   const currentTypeConfig = useMemo(() => getAccountTypeConfig(countryConfig, type), [countryConfig, type]);
   const showCostBasis = currentTypeConfig?.hasCostBasis ?? false;
   const showContributionBasis = isRothAccount(type, countryConfig);
+  const showOwner = hasSpouse && (currentTypeConfig?.annualContributionLimits?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!showContributionBasis) unregister('contributionBasis');
@@ -220,7 +225,7 @@ export default function AccountDialog({
                   value={syncedFinanceId}
                   onChange={handleSyncChange}
                 />
-                <Field className="col-span-2">
+                <Field className={showOwner ? 'col-span-1' : 'col-span-2'}>
                   <Label htmlFor="type">Account Type</Label>
                   <Select {...register('type')} id="type" name="type" disabled={isSynced}>
                     {categoryOrder.map((cat) => {
@@ -239,6 +244,15 @@ export default function AccountDialog({
                   </Select>
                   {errors.type && <ErrorMessage>{errors.type?.message}</ErrorMessage>}
                 </Field>
+                {showOwner && (
+                  <Field>
+                    <Label htmlFor="owner">Owner</Label>
+                    <Select {...register('owner')} id="owner" name="owner">
+                      <option value="primary">You</option>
+                      <option value="spouse">Spouse</option>
+                    </Select>
+                  </Field>
+                )}
                 <Field className={getBalanceColSpan()}>
                   <Label htmlFor="balance">Balance</Label>
                   <NumberInput

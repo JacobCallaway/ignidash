@@ -185,3 +185,8 @@ Open http://localhost:3000 in your browser.
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=schelskedevco/ignidash&type=date&legend=bottom-right)](https://www.star-history.com/#schelskedevco/ignidash&type=date&legend=bottom-right)
+
+## TODO
+
+- change expense limit to be per same frequency as expense
+- remove expense limit (10)

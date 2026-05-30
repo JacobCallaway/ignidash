@@ -16,6 +16,7 @@ export interface AccountInputs {
   name: string;
   balance: number;
   type: string;
+  owner: 'primary' | 'spouse';
   syncedFinanceId?: string;
   percentBonds?: number;
   costBasis?: number;
@@ -28,6 +29,7 @@ const baseShape = {
   id: z.string(),
   name: z.string().min(2, 'Name must be at least 2 characters').max(50, 'Name must be at most 50 characters'),
   balance: currencyFieldAllowsZero('Balance cannot be negative'),
+  owner: z.enum(['primary', 'spouse']).default('primary'),
   syncedFinanceId: z.string().optional(),
 };
 

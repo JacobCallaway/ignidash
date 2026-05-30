@@ -314,7 +314,7 @@ describe('Expense Growth Rate Tests', () => {
       createExpenseInput({
         amount: 5000,
         frequency: 'monthly',
-        growth: { growthRate: 100, growthLimit: 72000 }, // 100% annual growth, max $72k/year
+        growth: { growthRate: 100, growthLimit: 6000 }, // 100% annual growth, max $6k/month ($72k/year)
       })
     );
 
@@ -331,7 +331,7 @@ describe('Expense Growth Rate Tests', () => {
       createExpenseInput({
         amount: 5000,
         frequency: 'monthly',
-        growth: { growthRate: -50, growthLimit: 36000 }, // -50% annual, min $36k/year
+        growth: { growthRate: -50, growthLimit: 3000 }, // -50% annual, min $3k/month ($36k/year)
       })
     );
 

@@ -5,6 +5,7 @@ export const accountValidator = v.object({
   name: v.string(),
   balance: v.number(),
   type: v.string(),
+  owner: v.optional(v.union(v.literal('primary'), v.literal('spouse'))),
   percentBonds: v.optional(v.number()),
   costBasis: v.optional(v.number()),
   contributionBasis: v.optional(v.number()),

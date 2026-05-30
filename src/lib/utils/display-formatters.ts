@@ -73,13 +73,14 @@ export const physicalAssetTimeFrameForDisplay = (startTimePoint: TimePoint, endT
   return endLabel ? `${startLabel} → ${endLabel}` : startLabel;
 };
 
-export const growthForDisplay = (growthRate: Growth['growthRate'], growthLimit: Growth['growthLimit']) => {
+export const growthForDisplay = (growthRate: Growth['growthRate'], growthLimit: Growth['growthLimit'], frequency?: Frequency) => {
   if (growthRate === undefined) return 'No Growth';
 
   const rate = Number(growthRate).toFixed(1);
   if (growthLimit === undefined) return `Rate: ${rate}%, No Limit`;
 
-  return `Rate: ${rate}%, Limit: ${formatCompactCurrency(growthLimit, 0)}`;
+  const freqLabel = frequency ? ` ${frequencyForDisplay(frequency)}` : '';
+  return `Rate: ${rate}%, Limit: ${formatCompactCurrency(growthLimit, 0)}${freqLabel}`;
 };
 
 export const frequencyForDisplay = (frequency: Frequency) => {

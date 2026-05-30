@@ -26,6 +26,7 @@ const create401kAccount = (overrides?: Partial<AccountInputs & { type: '401k' }>
   id: overrides?.id ?? '401k-1',
   name: overrides?.name ?? '401k Account',
   balance: overrides?.balance ?? 100000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 20,
 });
 
@@ -34,6 +35,7 @@ const createRothIraAccount = (overrides?: Partial<AccountInputs & { type: 'rothI
   id: overrides?.id ?? 'roth-ira-1',
   name: overrides?.name ?? 'Roth IRA',
   balance: overrides?.balance ?? 50000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 10,
   contributionBasis: overrides?.contributionBasis ?? 40000,
 });
@@ -43,6 +45,7 @@ const createRoth401kAccount = (overrides?: Partial<AccountInputs & { type: 'roth
   id: overrides?.id ?? 'roth401k-1',
   name: overrides?.name ?? 'Roth 401k',
   balance: overrides?.balance ?? 50000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 20,
   contributionBasis: overrides?.contributionBasis ?? 50000,
 });
@@ -52,6 +55,7 @@ const createRoth403bAccount = (overrides?: Partial<AccountInputs & { type: 'roth
   id: overrides?.id ?? 'roth403b-1',
   name: overrides?.name ?? 'Roth 403b',
   balance: overrides?.balance ?? 30000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 15,
   contributionBasis: overrides?.contributionBasis ?? 30000,
 });
@@ -61,6 +65,7 @@ const createSavingsAccountInput = (overrides?: Partial<AccountInputs & { type: '
   id: overrides?.id ?? 'savings-1',
   name: overrides?.name ?? 'Savings Account',
   balance: overrides?.balance ?? 10000,
+  owner: overrides?.owner ?? 'primary',
 });
 
 // Factory function that creates properly typed contribution rules based on contributionType
@@ -174,7 +179,7 @@ describe('ContributionRules', () => {
         const account = new TaxDeferredAccount(create401kAccount());
 
         // Prior employee contributions: 2000 (fully exhausted)
-        rule.recordContribution(2000, 0, '401k');
+        rule.recordContribution(2000, 0, '401k', 'primary');
 
         const result = rule.calculateContribution(5000, account, 35, null);
 
@@ -195,7 +200,7 @@ describe('ContributionRules', () => {
         const account = new TaxDeferredAccount(create401kAccount());
 
         // First month: contribute 500
-        rule.recordContribution(500, 0, '401k');
+        rule.recordContribution(500, 0, '401k', 'primary');
 
         // Second month: should only contribute remaining 1500
         const result = rule.calculateContribution(5000, account, 35, null);
@@ -347,7 +352,7 @@ describe('ContributionRules', () => {
         const account = new TaxDeferredAccount(create401kAccount());
 
         // Previous contributions of 20,000 in the year
-        rule.recordContribution(20000, 0, '401k');
+        rule.recordContribution(20000, 0, '401k', 'primary');
 
         // At age 35, limit is 24,500. Already contributed 20k, so max is 4,500
         const result = rule.calculateContribution(10000, account, 35, null);
@@ -438,10 +443,11 @@ describe('ContributionRules', () => {
           name: 'HSA',
           balance: 5000,
           percentBonds: 10,
+          owner: 'primary',
         });
 
         // Prior HSA contributions: 3000
-        rule.recordContribution(3000, 0, 'hsa');
+        rule.recordContribution(3000, 0, 'hsa', 'primary');
 
         // HSA limit at age 35 = 4400, already contributed 3000 → 1400 remaining
         const result = rule.calculateContribution(10000, account, 35, null);
@@ -560,7 +566,7 @@ describe('ContributionRules', () => {
       const account = new TaxDeferredAccount(create401kAccount());
 
       // Previous: 1000 employee + 1000 employer match
-      rule.recordContribution(1000, 1000, '401k');
+      rule.recordContribution(1000, 1000, '401k', 'primary');
 
       const result = rule.calculateContribution(5000, account, 35, null);
 
@@ -585,7 +591,7 @@ describe('ContributionRules', () => {
       const account = new TaxDeferredAccount(create401kAccount());
 
       // Prior: 1000 employee + 2000 employer match
-      rule.recordContribution(1000, 2000, '401k');
+      rule.recordContribution(1000, 2000, '401k', 'primary');
 
       const result = rule.calculateContribution(10000, account, 35, null);
 
@@ -630,6 +636,7 @@ describe('ContributionRules', () => {
           name: 'HSA',
           balance: 5000,
           percentBonds: 10,
+          owner: 'primary',
         });
 
         // Process 401(k) rule first
@@ -638,7 +645,7 @@ describe('ContributionRules', () => {
         expect(result401k.employerMatchAmount).toBe(7000);
 
         // Record the 401(k) contribution
-        rule401k.recordContribution(10000, 7000, '401k');
+        rule401k.recordContribution(10000, 7000, '401k', 'primary');
 
         // Process HSA rule — should be independent of 401(k) match
         const resultHsa = ruleHsa.calculateContribution(40000, accountHsa, 35, null);
@@ -680,10 +687,11 @@ describe('ContributionRules', () => {
           name: 'HSA',
           balance: 5000,
           percentBonds: 10,
+          owner: 'primary',
         });
 
         // Prior month: 401(k) has 3k employee + 5k employer; HSA has 0
-        rule401k.recordContribution(3000, 5000, '401k');
+        rule401k.recordContribution(3000, 5000, '401k', 'primary');
 
         // 401(k): dollarAmount=6000, 3k employee so far → 3k remaining
         // employerMatch=7000, 5k already matched → 2k remaining; min(3000, 2000) = $2,000
@@ -866,6 +874,7 @@ describe('ContributionRules', () => {
             amountWithheld: 0,
             ficaTax: 0,
             incomeAfterPayrollDeductions: 5000,
+            owner: 'primary' as const,
             taxFreeIncome: 0,
             socialSecurityIncome: 0,
           },
@@ -876,6 +885,7 @@ describe('ContributionRules', () => {
             amountWithheld: 0,
             ficaTax: 0,
             incomeAfterPayrollDeductions: 2000,
+            owner: 'primary' as const,
             taxFreeIncome: 0,
             socialSecurityIncome: 0,
           },
@@ -910,6 +920,7 @@ describe('ContributionRules', () => {
             amountWithheld: 0,
             ficaTax: 0,
             incomeAfterPayrollDeductions: 3000,
+            owner: 'primary' as const,
             taxFreeIncome: 0,
             socialSecurityIncome: 0,
           },
@@ -917,7 +928,7 @@ describe('ContributionRules', () => {
       });
 
       // Prior 401k contributions: 22000 employee (from prior months)
-      rule.recordContribution(22000, 0, '401k');
+      rule.recordContribution(22000, 0, '401k', 'primary');
       tracker.resetMonthly(); // clear per-income tracking to simulate month boundary
 
       // Contribution limit remaining = 24500 - 22000 = 2500 (binding); income = 3000
@@ -948,6 +959,7 @@ describe('ContributionRules', () => {
             amountWithheld: 0,
             ficaTax: 0,
             incomeAfterPayrollDeductions: 1500,
+            owner: 'primary' as const,
             taxFreeIncome: 0,
             socialSecurityIncome: 0,
           },
@@ -955,7 +967,7 @@ describe('ContributionRules', () => {
       });
 
       // Prior 401k contributions: 22000 employee (from prior months)
-      rule.recordContribution(22000, 0, '401k');
+      rule.recordContribution(22000, 0, '401k', 'primary');
       tracker.resetMonthly(); // clear per-income tracking to simulate month boundary
 
       // Contribution limit remaining = 24500 - 22000 = 2500; income = 1500 (binding)
@@ -987,6 +999,7 @@ describe('ContributionRules', () => {
             amountWithheld: 0,
             ficaTax: 0,
             incomeAfterPayrollDeductions: 2000,
+            owner: 'primary' as const,
             taxFreeIncome: 0,
             socialSecurityIncome: 0,
           },
@@ -1058,11 +1071,12 @@ describe('ContributionRules', () => {
         balance: 50000,
         percentBonds: 20,
         contributionBasis: 50000,
+        owner: 'primary',
       };
       const account = new TaxFreeAccount(roth401kAccountData);
 
       // Already contributed 20k to traditional 401k (via a different rule)
-      tracker.recordContribution('401k', 20000, 0, undefined);
+      tracker.recordContribution('401k', 'primary', 20000, 0, undefined);
 
       // At age 35, limit is 24,500 for 401k+roth401k combined
       // Already contributed 20k to 401k, so roth401k can only get 4,500
@@ -1084,7 +1098,7 @@ describe('ContributionRules', () => {
       const account = new TaxFreeAccount(createRothIraAccount({ id: 'roth-ira-1' }));
 
       // Already contributed 5k to traditional IRA (via a different rule)
-      tracker.recordContribution('ira', 5000, 0, undefined);
+      tracker.recordContribution('ira', 'primary', 5000, 0, undefined);
 
       // At age 35, IRA limit is 7,500 for IRA+rothIRA combined
       // Already contributed 5k to IRA, so Roth IRA can only get 2,500
@@ -1181,7 +1195,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth401kAccount());
 
         // $60k already contributed
-        rule.recordContribution(60000, 0, 'roth401k');
+        rule.recordContribution(60000, 0, 'roth401k', 'primary');
 
         const result = rule.calculateContribution(100000, account, 35, null);
 
@@ -1202,7 +1216,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth401kAccount());
 
         // $72k already contributed
-        rule.recordContribution(72000, 0, 'roth401k');
+        rule.recordContribution(72000, 0, 'roth401k', 'primary');
 
         const result = rule.calculateContribution(100000, account, 35, null);
 
@@ -1249,7 +1263,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth401kAccount());
 
         // $24,500 employee already contributed to 401k (via a different rule)
-        tracker.recordContribution('401k', 24500, 0, undefined);
+        tracker.recordContribution('401k', 'primary', 24500, 0, undefined);
 
         // 415(c) limit at age 35 = $72,000. Already $24,500 total → $47,500 remaining
         const result = rule.calculateContribution(100000, account, 35, null);
@@ -1271,7 +1285,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth401kAccount());
 
         // $24,500 employee + $7,000 employer = $31,500 total in 401k (via a different rule)
-        tracker.recordContribution('401k', 24500, 7000, undefined);
+        tracker.recordContribution('401k', 'primary', 24500, 7000, undefined);
 
         // 415(c) limit = $72,000. Total (incl employer) = $31,500 → $40,500 remaining
         const result = rule.calculateContribution(100000, account, 35, null);
@@ -1293,7 +1307,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth403bAccount());
 
         // $20,000 already contributed to 401k (via a different rule)
-        tracker.recordContribution('401k', 20000, 0, undefined);
+        tracker.recordContribution('401k', 'primary', 20000, 0, undefined);
 
         // 415(c) = $72,000. $20,000 from 401k → $52,000 remaining for roth403b MBR
         const result = rule.calculateContribution(100000, account, 35, null);
@@ -1314,7 +1328,7 @@ describe('ContributionRules', () => {
         const iraAccount = new TaxFreeAccount(createRothIraAccount());
 
         // MBR roth401k has $60k contributed — should not affect IRA
-        tracker.recordContribution('roth401k', 60000, 0, undefined);
+        tracker.recordContribution('roth401k', 'primary', 60000, 0, undefined);
 
         // IRA limit at age 35 = $7,500, completely independent of 401k/roth401k
         const result = iraRule.calculateContribution(10000, iraAccount, 35, null);
@@ -1339,7 +1353,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth401kAccount());
 
         // Prior total = $71,000 in shared limit group (via a different rule)
-        tracker.recordContribution('401k', 71000, 0, undefined);
+        tracker.recordContribution('401k', 'primary', 71000, 0, undefined);
 
         // 415(c) remaining = $72,000 - $71,000 = $1,000
         // Employee contribution capped at $1,000
@@ -1389,7 +1403,7 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth401kAccount());
 
         // $30,000 already contributed
-        rule.recordContribution(30000, 0, 'roth401k');
+        rule.recordContribution(30000, 0, 'roth401k', 'primary');
 
         // 415(c) remaining = $72,000 - $30,000 = $42,000
         // Dollar amount desired = $50,000 - $30,000 already = $20,000
@@ -1463,6 +1477,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 30000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -1582,7 +1597,7 @@ describe('ContributionRules', () => {
         const nonMbrAccount = new TaxFreeAccount(createRoth401kAccount({ id: 'roth401k-2' }));
 
         // MBR account already contributed $72k — shared limit tracking sums by account type
-        tracker.recordContribution('roth401k', 72000, 0, undefined);
+        tracker.recordContribution('roth401k', 'primary', 72000, 0, undefined);
 
         // Non-MBR rule uses §402(g) = $24,500
         // Shared contributions across roth401k type = $72,000
@@ -1625,7 +1640,7 @@ describe('ContributionRules', () => {
         expect(mbrResult.contributionAmount).toBe(20000);
 
         // Record the MBR contribution
-        mbrRule.recordContribution(20000, 0, 'roth401k');
+        mbrRule.recordContribution(20000, 0, 'roth401k', 'primary');
 
         // Non-MBR rule uses §402(g) = $24,500
         // Shared contributions across roth401k type = $20,000
@@ -1660,9 +1675,9 @@ describe('ContributionRules', () => {
 
       // Two 401k accounts contributing to shared limit:
       // This rule: 2000 employee contributions
-      rule.recordContribution(2000, 0, '401k');
+      rule.recordContribution(2000, 0, '401k', 'primary');
       // Another rule's contributions (via tracker directly): 22000 employee
-      tracker.recordContribution('401k', 22000, 0, undefined);
+      tracker.recordContribution('401k', 'primary', 22000, 0, undefined);
       // Combined by account types = 24000
 
       // Constraints at age 35:
@@ -1703,7 +1718,7 @@ describe('ContributionRules', () => {
 
       const result1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(result1.contributionAmount).toBe(20000);
-      rule401k.recordContribution(20000, 0, '401k');
+      rule401k.recordContribution(20000, 0, '401k', 'primary');
 
       // Shared limit is $24,500, already used $20k → $4,500 remaining
       const result2 = ruleRoth401k.calculateContribution(30000, accountRoth401k, 35, null);
@@ -1723,12 +1738,19 @@ describe('ContributionRules', () => {
         usHelpers
       );
 
-      const accountIra = new TaxDeferredAccount({ type: 'ira', id: 'ira-1', name: 'IRA', balance: 50000, percentBonds: 20 });
+      const accountIra = new TaxDeferredAccount({
+        type: 'ira',
+        id: 'ira-1',
+        name: 'IRA',
+        balance: 50000,
+        percentBonds: 20,
+        owner: 'primary',
+      });
       const accountRothIra = new TaxFreeAccount(createRothIraAccount());
 
       const result1 = ruleIra.calculateContribution(50000, accountIra, 35, null);
       expect(result1.contributionAmount).toBe(5000);
-      ruleIra.recordContribution(5000, 0, 'ira');
+      ruleIra.recordContribution(5000, 0, 'ira', 'primary');
 
       // Shared limit is $7,500, already used $5k → $2,500 remaining
       const result2 = ruleRothIra.calculateContribution(30000, accountRothIra, 35, null);
@@ -1755,17 +1777,24 @@ describe('ContributionRules', () => {
 
       const account401k = new TaxDeferredAccount(create401kAccount());
       const accountRoth401k = new TaxFreeAccount(createRoth401kAccount());
-      const account403b = new TaxDeferredAccount({ type: '403b', id: '403b-1', name: '403b', balance: 50000, percentBonds: 20 });
+      const account403b = new TaxDeferredAccount({
+        type: '403b',
+        id: '403b-1',
+        name: '403b',
+        balance: 50000,
+        percentBonds: 20,
+        owner: 'primary',
+      });
 
       // Rule 1: $10k to 401k
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(10000);
-      rule401k.recordContribution(10000, 0, '401k');
+      rule401k.recordContribution(10000, 0, '401k', 'primary');
 
       // Rule 2: $10k to roth401k — $14,500 remaining in shared limit, dollar amount is $10k
       const r2 = ruleRoth401k.calculateContribution(40000, accountRoth401k, 35, null);
       expect(r2.contributionAmount).toBe(10000);
-      ruleRoth401k.recordContribution(10000, 0, 'roth401k');
+      ruleRoth401k.recordContribution(10000, 0, 'roth401k', 'primary');
 
       // Rule 3: unlimited to 403b — only $4,500 left in shared $24,500 limit
       const r3 = rule403b.calculateContribution(30000, account403b, 35, null);
@@ -1805,7 +1834,7 @@ describe('ContributionRules', () => {
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(24500);
       expect(r1.employerMatchAmount).toBe(7000);
-      rule401k.recordContribution(24500, 7000, '401k');
+      rule401k.recordContribution(24500, 7000, '401k', 'primary');
 
       // Rule 2 (MBR): 415(c) = $72,000 − $31,500 = $40,500 remaining
       const r2 = ruleMbr.calculateContribution(100000, accountRoth401k, 35, null);
@@ -1826,12 +1855,19 @@ describe('ContributionRules', () => {
       );
 
       const account401k = new TaxDeferredAccount(create401kAccount());
-      const accountHsa = new TaxDeferredAccount({ type: 'hsa', id: 'hsa-1', name: 'HSA', balance: 5000, percentBonds: 10 });
+      const accountHsa = new TaxDeferredAccount({
+        type: 'hsa',
+        id: 'hsa-1',
+        name: 'HSA',
+        balance: 5000,
+        percentBonds: 10,
+        owner: 'primary',
+      });
 
       // 401k: unlimited, capped at $24,500
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(24500);
-      rule401k.recordContribution(24500, 0, '401k');
+      rule401k.recordContribution(24500, 0, '401k', 'primary');
 
       // HSA: should still get full $4,400 — different limit group entirely
       const r2 = ruleHsa.calculateContribution(25500, accountHsa, 35, null);
@@ -1864,7 +1900,7 @@ describe('ContributionRules', () => {
       // MBR rule: $30k (under 415(c) of $72k)
       const r1 = ruleMbr.calculateContribution(100000, accountRoth401k, 35, null);
       expect(r1.contributionAmount).toBe(30000);
-      ruleMbr.recordContribution(30000, 0, 'roth401k');
+      ruleMbr.recordContribution(30000, 0, 'roth401k', 'primary');
 
       // 401k rule: §402(g) = $24,500, but tracker shows $30k across the group → $0
       const r2 = rule401k.calculateContribution(70000, account401k, 35, null);
@@ -1897,11 +1933,11 @@ describe('ContributionRules', () => {
 
       const r1 = rule1.calculateContribution(50000, account, 35, null);
       expect(r1.contributionAmount).toBe(2000);
-      rule1.recordContribution(2000, 0, '401k');
+      rule1.recordContribution(2000, 0, '401k', 'primary');
 
       const r2 = rule2.calculateContribution(48000, account, 35, null);
       expect(r2.contributionAmount).toBe(3000);
-      rule2.recordContribution(3000, 0, '401k');
+      rule2.recordContribution(3000, 0, '401k', 'primary');
 
       // Total contributed = $5,000 = sum of both dollar amounts
       // Both rules exhausted in month 2
@@ -1930,15 +1966,15 @@ describe('ContributionRules', () => {
 
       const r1 = rule1.calculateContribution(50000, account, 35, null);
       expect(r1.contributionAmount).toBe(3000);
-      rule1.recordContribution(3000, 0, '401k');
+      rule1.recordContribution(3000, 0, '401k', 'primary');
 
       const r2 = rule2.calculateContribution(47000, account, 35, null);
       expect(r2.contributionAmount).toBe(5000);
-      rule2.recordContribution(5000, 0, '401k');
+      rule2.recordContribution(5000, 0, '401k', 'primary');
 
       const r3 = rule3.calculateContribution(42000, account, 35, null);
       expect(r3.contributionAmount).toBe(4000);
-      rule3.recordContribution(4000, 0, '401k');
+      rule3.recordContribution(4000, 0, '401k', 'primary');
 
       // Total = $12,000 = $3k + $5k + $4k
     });
@@ -1966,7 +2002,7 @@ describe('ContributionRules', () => {
       // Rule 1: $5k dollar amount
       const r1 = ruleDollar.calculateContribution(20000, account, 35, null);
       expect(r1.contributionAmount).toBe(5000);
-      ruleDollar.recordContribution(5000, 0, '401k');
+      ruleDollar.recordContribution(5000, 0, '401k', 'primary');
 
       // Rule 2: 50% of remaining $15k = $7,500
       const r2 = rulePercent.calculateContribution(15000, account, 35, null);
@@ -1989,7 +2025,7 @@ describe('ContributionRules', () => {
 
       const r1 = ruleDollar.calculateContribution(30000, account, 35, null);
       expect(r1.contributionAmount).toBe(5000);
-      ruleDollar.recordContribution(5000, 0, '401k');
+      ruleDollar.recordContribution(5000, 0, '401k', 'primary');
 
       // Unlimited gets rest but capped at shared limit: $24,500 − $5,000 = $19,500
       const r2 = ruleUnlimited.calculateContribution(25000, account, 35, null);
@@ -2011,8 +2047,8 @@ describe('ContributionRules', () => {
       const account = new TaxDeferredAccount(create401kAccount());
 
       // Month 1: partial contributions
-      rule1.recordContribution(2000, 0, '401k');
-      rule2.recordContribution(3000, 0, '401k');
+      rule1.recordContribution(2000, 0, '401k', 'primary');
+      rule2.recordContribution(3000, 0, '401k', 'primary');
 
       // Month 2: Rule 1 has $3k remaining (5000−2000), Rule 2 has $5k remaining (8000−3000)
       expect(rule1.calculateContribution(50000, account, 35, null).contributionAmount).toBe(3000);
@@ -2050,12 +2086,12 @@ describe('ContributionRules', () => {
       const r1 = rule1.calculateContribution(50000, account, 35, null);
       expect(r1.contributionAmount).toBe(3000);
       expect(r1.employerMatchAmount).toBe(1500);
-      rule1.recordContribution(3000, 1500, '401k');
+      rule1.recordContribution(3000, 1500, '401k', 'primary');
 
       const r2 = rule2.calculateContribution(47000, account, 35, null);
       expect(r2.contributionAmount).toBe(4000);
       expect(r2.employerMatchAmount).toBe(2000);
-      rule2.recordContribution(4000, 2000, '401k');
+      rule2.recordContribution(4000, 2000, '401k', 'primary');
 
       // Both fully exhausted
       expect(rule1.calculateContribution(50000, account, 35, null).contributionAmount).toBe(0);
@@ -2091,7 +2127,7 @@ describe('ContributionRules', () => {
       // Rule 1: $15k
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(15000);
-      rule401k.recordContribution(15000, 0, '401k');
+      rule401k.recordContribution(15000, 0, '401k', 'primary');
 
       // Rule 2: wants $15k but only $9,500 left in shared limit
       const r2 = ruleRoth401k.calculateContribution(35000, accountRoth401k, 35, null);
@@ -2122,7 +2158,7 @@ describe('ContributionRules', () => {
 
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(20000);
-      rule401k.recordContribution(20000, 0, '401k');
+      rule401k.recordContribution(20000, 0, '401k', 'primary');
 
       // 100% of $30k = $30k, but shared limit only has $4,500 left
       const r2 = ruleRoth401k.calculateContribution(30000, accountRoth401k, 35, null);
@@ -2148,7 +2184,7 @@ describe('ContributionRules', () => {
       // First unlimited rule takes full $24,500
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(24500);
-      rule401k.recordContribution(24500, 0, '401k');
+      rule401k.recordContribution(24500, 0, '401k', 'primary');
 
       // Second gets $0
       const r2 = ruleRoth401k.calculateContribution(25500, accountRoth401k, 35, null);
@@ -2188,7 +2224,7 @@ describe('ContributionRules', () => {
       const r1 = rule401k.calculateContribution(50000, account401k, 35, null);
       expect(r1.contributionAmount).toBe(20000);
       expect(r1.employerMatchAmount).toBe(10000);
-      rule401k.recordContribution(20000, 10000, '401k');
+      rule401k.recordContribution(20000, 10000, '401k', 'primary');
 
       // MBR roth401k: 415(c) = $72,000 − $30,000 (employee+employer) = $42,000
       const r2 = ruleMbr.calculateContribution(50000, accountRoth401k, 35, null);
@@ -2208,12 +2244,19 @@ describe('ContributionRules', () => {
         usHelpers
       );
 
-      const accountIra = new TaxDeferredAccount({ type: 'ira', id: 'ira-1', name: 'IRA', balance: 50000, percentBonds: 20 });
+      const accountIra = new TaxDeferredAccount({
+        type: 'ira',
+        id: 'ira-1',
+        name: 'IRA',
+        balance: 50000,
+        percentBonds: 20,
+        owner: 'primary',
+      });
       const accountRothIra = new TaxFreeAccount(createRothIraAccount());
 
       const r1 = ruleIra.calculateContribution(50000, accountIra, 35, null);
       expect(r1.contributionAmount).toBe(5000);
-      ruleIra.recordContribution(5000, 0, 'ira');
+      ruleIra.recordContribution(5000, 0, 'ira', 'primary');
 
       // Wants $5k but only $2,500 left in shared IRA limit
       const r2 = ruleRothIra.calculateContribution(45000, accountRothIra, 35, null);
@@ -2245,20 +2288,20 @@ describe('ContributionRules', () => {
 
       const a1 = new TaxDeferredAccount(create401kAccount());
       const a2 = new TaxFreeAccount(createRoth401kAccount());
-      const a3 = new TaxDeferredAccount({ type: '403b', id: '403b-1', name: '403b', balance: 50000, percentBonds: 20 });
+      const a3 = new TaxDeferredAccount({ type: '403b', id: '403b-1', name: '403b', balance: 50000, percentBonds: 20, owner: 'primary' });
       const a4 = new TaxFreeAccount(createRoth403bAccount());
 
       const res1 = r1.calculateContribution(50000, a1, 35, null);
       expect(res1.contributionAmount).toBe(8000);
-      r1.recordContribution(8000, 0, '401k');
+      r1.recordContribution(8000, 0, '401k', 'primary');
 
       const res2 = r2.calculateContribution(42000, a2, 35, null);
       expect(res2.contributionAmount).toBe(8000);
-      r2.recordContribution(8000, 0, 'roth401k');
+      r2.recordContribution(8000, 0, 'roth401k', 'primary');
 
       const res3 = r3.calculateContribution(34000, a3, 35, null);
       expect(res3.contributionAmount).toBe(8000);
-      r3.recordContribution(8000, 0, '403b');
+      r3.recordContribution(8000, 0, '403b', 'primary');
 
       // Only $500 left in shared limit ($24,500 − $24,000)
       const res4 = r4.calculateContribution(26000, a4, 35, null);
@@ -2311,6 +2354,7 @@ describe('ContributionRules', () => {
         amountWithheld: 0,
         ficaTax: 0,
         incomeAfterPayrollDeductions: amount,
+        owner: 'primary' as const,
         taxFreeIncome: 0,
         socialSecurityIncome: 0,
       });
@@ -2352,7 +2396,7 @@ describe('ContributionRules', () => {
         // Rule 1: unlimited but income-capped at $15k. Also capped at $24,500 → $15k wins
         const r1 = rule401k.calculateContribution(50000, account401k, 35, incomesData);
         expect(r1.contributionAmount).toBe(15000);
-        rule401k.recordContribution(15000, 0, '401k');
+        rule401k.recordContribution(15000, 0, '401k', 'primary');
 
         // Rule 2: income is $20k, but shared limit only has $9,500 left
         const r2 = ruleRoth401k.calculateContribution(35000, accountRoth401k, 35, incomesData);
@@ -2407,6 +2451,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 8000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -2487,7 +2532,7 @@ describe('ContributionRules', () => {
         const r1 = rule.calculateContribution(8000, account, 35, null);
         expect(r1.contributionAmount).toBe(4000);
         expect(r1.employerMatchAmount).toBe(3000);
-        rule.recordContribution(4000, 3000, '401k');
+        rule.recordContribution(4000, 3000, '401k', 'primary');
 
         // Month 2: 50% of $8k = $4k, match remaining = $3k - $3k = $0
         const r2 = rule.calculateContribution(8000, account, 35, null);
@@ -2512,8 +2557,8 @@ describe('ContributionRules', () => {
         const account = new TaxFreeAccount(createRoth403bAccount());
 
         // Already $60k in the 401k/403b/roth group
-        tracker.recordContribution('401k', 24500, 5500, undefined);
-        tracker.recordContribution('roth401k', 30000, 0, undefined);
+        tracker.recordContribution('401k', 'primary', 24500, 5500, undefined);
+        tracker.recordContribution('roth401k', 'primary', 30000, 0, undefined);
         // Total = employee $54,500 + employer $5,500 = $60,000
 
         // 415(c) at 35 = $72,000 − $60,000 = $12,000
@@ -2543,7 +2588,7 @@ describe('ContributionRules', () => {
       // Exhaust the dollar amount
       const result1 = rule.calculateContribution(50000, account, 35, null);
       expect(result1.contributionAmount).toBe(2000);
-      rule.recordContribution(2000, 0, '401k');
+      rule.recordContribution(2000, 0, '401k', 'primary');
 
       expect(rule.calculateContribution(50000, account, 35, null).contributionAmount).toBe(0);
 
@@ -2567,7 +2612,7 @@ describe('ContributionRules', () => {
       const accountRoth401k = new TaxFreeAccount(createRoth401kAccount());
 
       // Year 1: rule1 takes $20k, rule2 gets $4,500
-      rule1.recordContribution(20000, 0, '401k');
+      rule1.recordContribution(20000, 0, '401k', 'primary');
       const y1r2 = rule2.calculateContribution(50000, accountRoth401k, 35, null);
       expect(y1r2.contributionAmount).toBe(4500);
 
@@ -2597,7 +2642,7 @@ describe('ContributionRules', () => {
       const account = new TaxDeferredAccount(create401kAccount());
 
       // Year 1: fully exhaust employer match
-      rule.recordContribution(10000, 5000, '401k');
+      rule.recordContribution(10000, 5000, '401k', 'primary');
       const y1 = rule.calculateContribution(10000, account, 35, null);
       expect(y1.employerMatchAmount).toBe(0); // exhausted
 
@@ -2736,14 +2781,14 @@ describe('ContributionRules', () => {
 
       it('should accumulate contributions across multiple calls with the same incomeId', () => {
         const tracker = new ContributionTracker();
-        tracker.recordContribution('401k', 1000, 0, 'income-1');
-        tracker.recordContribution('401k', 500, 0, 'income-1');
+        tracker.recordContribution('401k', 'primary', 1000, 0, 'income-1');
+        tracker.recordContribution('401k', 'primary', 500, 0, 'income-1');
         expect(tracker.getEmployeeByIncome('income-1')).toBe(1500);
       });
 
       it('should not record income tracking when incomeId is undefined', () => {
         const tracker = new ContributionTracker();
-        tracker.recordContribution('401k', 1000, 0, undefined);
+        tracker.recordContribution('401k', 'primary', 1000, 0, undefined);
         expect(tracker.getEmployeeByIncome('income-1')).toBe(0);
       });
     });
@@ -2751,26 +2796,26 @@ describe('ContributionRules', () => {
     describe('ContributionTracker.resetMonthly vs resetYTD', () => {
       it('should clear employeeByIncome but preserve employeeByType and employerByType on resetMonthly', () => {
         const tracker = new ContributionTracker();
-        tracker.recordContribution('401k', 5000, 2000, 'income-1');
+        tracker.recordContribution('401k', 'primary', 5000, 2000, 'income-1');
 
         tracker.resetMonthly();
 
         // Per-income tracking cleared
         expect(tracker.getEmployeeByIncome('income-1')).toBe(0);
         // Per-type tracking preserved
-        expect(tracker.getEmployeeByTypes(['401k'])).toBe(5000);
-        expect(tracker.getEmployerByTypes(['401k'])).toBe(2000);
+        expect(tracker.getEmployeeByTypes(['401k'], 'primary')).toBe(5000);
+        expect(tracker.getEmployerByTypes(['401k'], 'primary')).toBe(2000);
       });
 
       it('should clear all maps on resetYTD', () => {
         const tracker = new ContributionTracker();
-        tracker.recordContribution('401k', 5000, 2000, 'income-1');
+        tracker.recordContribution('401k', 'primary', 5000, 2000, 'income-1');
 
         tracker.resetYTD();
 
         expect(tracker.getEmployeeByIncome('income-1')).toBe(0);
-        expect(tracker.getEmployeeByTypes(['401k'])).toBe(0);
-        expect(tracker.getEmployerByTypes(['401k'])).toBe(0);
+        expect(tracker.getEmployeeByTypes(['401k'], 'primary')).toBe(0);
+        expect(tracker.getEmployerByTypes(['401k'], 'primary')).toBe(0);
       });
     });
 
@@ -2812,6 +2857,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 3000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -2821,7 +2867,7 @@ describe('ContributionRules', () => {
         // Rule 1 contributes $2000
         const r1 = rule1.calculateContribution(10000, account401k, 35, incomesData);
         expect(r1.contributionAmount).toBe(2000);
-        rule1.recordContribution(2000, 0, '401k');
+        rule1.recordContribution(2000, 0, '401k', 'primary');
 
         // Rule 2 should only see $1000 remaining income ($3000 - $2000)
         const r2 = rule2.calculateContribution(10000, accountSavings, 35, incomesData);
@@ -2866,6 +2912,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 3000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -2876,6 +2923,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 2000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -2885,7 +2933,7 @@ describe('ContributionRules', () => {
         // Rule 1 consumes full income-1
         const r1 = rule1.calculateContribution(10000, account401k, 35, incomesData);
         expect(r1.contributionAmount).toBe(3000);
-        rule1.recordContribution(3000, 0, '401k');
+        rule1.recordContribution(3000, 0, '401k', 'primary');
 
         // Rule 2 should still have full income-2 available
         const r2 = rule2.calculateContribution(10000, accountSavings, 35, incomesData);
@@ -2927,6 +2975,7 @@ describe('ContributionRules', () => {
           name: 'HSA',
           balance: 5000,
           percentBonds: 0,
+          owner: 'primary',
         });
 
         const incomesData = createEmptyIncomesData({
@@ -2938,6 +2987,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 100,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -2948,6 +2998,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 1000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -2964,12 +3015,12 @@ describe('ContributionRules', () => {
 
           // Process rules in rank order (same as PortfolioProcessor)
           const r1 = rule401k.calculateContribution(remaining, account401k, 35, incomesData);
-          rule401k.recordContribution(r1.contributionAmount, r1.employerMatchAmount, '401k');
+          rule401k.recordContribution(r1.contributionAmount, r1.employerMatchAmount, '401k', 'primary');
           remaining -= r1.contributionAmount;
           totalContributions += r1.contributionAmount;
 
           const r2 = ruleHsa.calculateContribution(remaining, accountHsa, 35, incomesData);
-          ruleHsa.recordContribution(r2.contributionAmount, r2.employerMatchAmount, 'hsa');
+          ruleHsa.recordContribution(r2.contributionAmount, r2.employerMatchAmount, 'hsa', 'primary');
           remaining -= r2.contributionAmount;
           totalContributions += r2.contributionAmount;
 
@@ -3010,6 +3061,7 @@ describe('ContributionRules', () => {
               amountWithheld: 0,
               ficaTax: 0,
               incomeAfterPayrollDeductions: 3000,
+              owner: 'primary' as const,
               taxFreeIncome: 0,
               socialSecurityIncome: 0,
             },
@@ -3019,7 +3071,7 @@ describe('ContributionRules', () => {
         // Month 1: contribute full income
         const m1 = rule.calculateContribution(10000, account, 35, incomesData);
         expect(m1.contributionAmount).toBe(3000);
-        rule.recordContribution(3000, 0, '401k');
+        rule.recordContribution(3000, 0, '401k', 'primary');
 
         // Without reset, income-1 budget is exhausted
         const exhausted = rule.calculateContribution(10000, account, 35, incomesData);

@@ -167,9 +167,9 @@ export class Expense {
 
         const growthLimit = this.growthLimit;
         if (growthLimit !== undefined && realGrowthRate > 0) {
-          annualAmount = Math.min(annualAmount, growthLimit);
+          annualAmount = Math.min(annualAmount, growthLimit * timesToApplyPerYear);
         } else if (growthLimit !== undefined && realGrowthRate < 0) {
-          annualAmount = Math.max(annualAmount, growthLimit);
+          annualAmount = Math.max(annualAmount, growthLimit * timesToApplyPerYear);
         }
 
         if (timesToApplyPerYear !== 0) this.amount = Math.max(annualAmount / timesToApplyPerYear, 0);

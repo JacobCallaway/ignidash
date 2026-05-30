@@ -75,11 +75,13 @@ export interface SimulationContext {
   readonly endDate: Date;
   readonly retirementStrategy: RetirementStrategyInputs;
   readonly rmdAge: number;
+  readonly spouseStartAge?: number;
 }
 
 /** Mutable simulation state that evolves each month */
 export interface SimulationState {
   time: { date: Date; age: number; year: number; month: number };
+  spouseAge?: number;
   portfolio: Portfolio;
   phase: PhaseData | null;
   annualData: { expenses: ExpensesData[]; debts: DebtsData[]; physicalAssets: PhysicalAssetsData[] };
@@ -305,6 +307,10 @@ export class FinancialSimulationEngine {
 
     simulationState.time.age = simulationContext.startAge + monthsElapsed / 12;
     simulationState.time.year = monthsElapsed / 12;
+
+    if (simulationContext.spouseStartAge !== undefined) {
+      simulationState.spouseAge = simulationContext.spouseStartAge + monthsElapsed / 12;
+    }
   }
 
   /**
@@ -363,9 +369,18 @@ export class FinancialSimulationEngine {
 
   private initSimulationContext(timeline: TimelineInputs, countryConfig: ReturnType<typeof getCountryConfig>): SimulationContext {
     const startAge = calculatePreciseAge(timeline.birthMonth, timeline.birthYear);
-    const endAge = timeline.lifeExpectancy;
 
-    const yearsToSimulate = Math.ceil(endAge - startAge);
+    let spouseStartAge: number | undefined;
+    if (timeline.spouseBirthYear !== undefined && timeline.spouseBirthMonth !== undefined) {
+      spouseStartAge = calculatePreciseAge(timeline.spouseBirthMonth, timeline.spouseBirthYear);
+    }
+
+    // Extend simulation to cover whichever person lives longer
+    const primaryYearsRemaining = timeline.lifeExpectancy - startAge;
+    const spouseYearsRemaining =
+      spouseStartAge !== undefined && timeline.spouseLifeExpectancy !== undefined ? timeline.spouseLifeExpectancy - spouseStartAge : 0;
+    const yearsToSimulate = Math.ceil(Math.max(primaryYearsRemaining, spouseYearsRemaining));
+    const endAge = startAge + yearsToSimulate;
 
     const startDate = new Date();
     const endDate = new Date(startDate.getFullYear() + yearsToSimulate, startDate.getMonth(), 1);
@@ -373,14 +388,15 @@ export class FinancialSimulationEngine {
     const retirementStrategy = timeline.retirementStrategy;
     const rmdAge = countryConfig.rmd?.getStartAge(timeline.birthYear) ?? Infinity;
 
-    return { startAge, endAge, yearsToSimulate, startDate, endDate, retirementStrategy, rmdAge };
+    return { startAge, endAge, yearsToSimulate, startDate, endDate, retirementStrategy, rmdAge, spouseStartAge };
   }
 
   private initSimulationState(simulationContext: SimulationContext, countryConfig: ReturnType<typeof getCountryConfig>): SimulationState {
-    const { startDate, startAge: age } = simulationContext;
+    const { startDate, startAge: age, spouseStartAge } = simulationContext;
 
     return {
       time: { date: new Date(startDate), age, year: 0, month: 0 },
+      spouseAge: spouseStartAge,
       portfolio: new Portfolio(Object.values(this.inputs.accounts), countryConfig),
       phase: null,
       annualData: { expenses: [], debts: [], physicalAssets: [] },

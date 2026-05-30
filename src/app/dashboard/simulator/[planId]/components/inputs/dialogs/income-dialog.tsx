@@ -25,7 +25,7 @@ import {
   defaultWithholding as getDefaultWithholding,
 } from '@/lib/schemas/inputs/income-form-schema';
 import { calculateAge } from '@/lib/schemas/inputs/timeline-form-schema';
-import { timeFrameForDisplay, growthForDisplay, incomeTaxTreatmentForDisplay } from '@/lib/utils/display-formatters';
+import { timeFrameForDisplay, growthForDisplay, incomeTaxTreatmentForDisplay, frequencyForDisplay } from '@/lib/utils/display-formatters';
 import { DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/catalyst/dialog';
 import NumberInput from '@/components/ui/number-input';
 import { Field, Fieldset, FieldGroup, Label, ErrorMessage } from '@/components/catalyst/fieldset';
@@ -214,6 +214,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
   const years = Array.from({ length: 2100 - currentYear + 1 }, (_, i) => currentYear + i);
 
   const timeline = useTimelineData();
+  const hasSpouse = timeline?.spouseBirthYear !== undefined;
   const currentAge = timeline ? calculateAge(timeline.birthMonth, timeline.birthYear) : 18;
   const lifeExpectancy = timeline?.lifeExpectancy ?? 110;
 
@@ -308,6 +309,15 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                   </Select>
                   {errors.frequency && <ErrorMessage>{errors.frequency?.message}</ErrorMessage>}
                 </Field>
+                {hasSpouse && (
+                  <Field className="col-span-2 sm:col-span-1">
+                    <Label htmlFor="owner">Owner</Label>
+                    <Select {...register('owner')} id="owner" name="owner">
+                      <option value="primary">You</option>
+                      <option value="spouse">Spouse</option>
+                    </Select>
+                  </Field>
+                )}
               </div>
               <Disclosure as="div" className="border-border/25 border-t pt-4">
                 {({ open, close }) => (
@@ -547,7 +557,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                           <span className="text-base/7 font-semibold">Rate of Change</span>
                           <span className="hidden sm:inline">|</span>
                           <span className="text-muted-foreground hidden truncate sm:inline">
-                            {growthForDisplay(growthRate, growthLimit)}
+                            {growthForDisplay(growthRate, growthLimit, frequency)}
                           </span>
                         </div>
                         <span className="text-muted-foreground ml-6 flex h-7 items-center">
@@ -582,7 +592,9 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                           </Field>
                           <Field>
                             <Label htmlFor="growth.growthLimit" className="flex w-full items-center justify-between">
-                              <span className="whitespace-nowrap">Limit</span>
+                              <span className="whitespace-nowrap">
+                                Limit <span className="text-muted-foreground font-normal">{frequencyForDisplay(frequency)}</span>
+                              </span>
                               <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
                             </Label>
                             <NumberInput
@@ -590,7 +602,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                               control={control}
                               id="growth.growthLimit"
                               inputMode="decimal"
-                              placeholder={formatCurrencyPlaceholder(120000)}
+                              placeholder={formatCurrencyPlaceholder(10000)}
                               prefix={getCurrencySymbol()}
                             />
                             {errors.growth?.growthLimit && <ErrorMessage>{errors.growth?.growthLimit?.message}</ErrorMessage>}

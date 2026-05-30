@@ -40,6 +40,11 @@ export class IncomesProcessor {
         acc.totalIncomeAfterPayrollDeductions += curr.incomeAfterPayrollDeductions;
         acc.totalTaxFreeIncome += curr.taxFreeIncome;
         acc.totalSocialSecurityIncome += curr.socialSecurityIncome;
+        if (curr.owner === 'spouse') {
+          acc.spouseTotalIncome += curr.income;
+          acc.spouseTotalSocialSecurityIncome += curr.socialSecurityIncome;
+          acc.spouseTotalTaxFreeIncome += curr.taxFreeIncome;
+        }
         return acc;
       },
       {
@@ -49,6 +54,9 @@ export class IncomesProcessor {
         totalIncomeAfterPayrollDeductions: 0,
         totalTaxFreeIncome: 0,
         totalSocialSecurityIncome: 0,
+        spouseTotalIncome: 0,
+        spouseTotalSocialSecurityIncome: 0,
+        spouseTotalTaxFreeIncome: 0,
       }
     );
     const perIncomeData = Object.fromEntries(processedIncomes.map((income) => [income.id, income]));
@@ -72,6 +80,9 @@ export class IncomesProcessor {
         acc.totalIncomeAfterPayrollDeductions += curr.totalIncomeAfterPayrollDeductions;
         acc.totalTaxFreeIncome += curr.totalTaxFreeIncome;
         acc.totalSocialSecurityIncome += curr.totalSocialSecurityIncome;
+        acc.spouseTotalIncome = (acc.spouseTotalIncome ?? 0) + (curr.spouseTotalIncome ?? 0);
+        acc.spouseTotalSocialSecurityIncome = (acc.spouseTotalSocialSecurityIncome ?? 0) + (curr.spouseTotalSocialSecurityIncome ?? 0);
+        acc.spouseTotalTaxFreeIncome = (acc.spouseTotalTaxFreeIncome ?? 0) + (curr.spouseTotalTaxFreeIncome ?? 0);
 
         for (const [incomeID, incomeData] of Object.entries(curr.perIncomeData)) {
           const existing = acc.perIncomeData[incomeID];
@@ -95,6 +106,9 @@ export class IncomesProcessor {
         totalIncomeAfterPayrollDeductions: 0,
         totalTaxFreeIncome: 0,
         totalSocialSecurityIncome: 0,
+        spouseTotalIncome: 0,
+        spouseTotalSocialSecurityIncome: 0,
+        spouseTotalTaxFreeIncome: 0,
         perIncomeData: {},
       } satisfies IncomesData
     );
@@ -108,6 +122,10 @@ export interface IncomesData {
   totalIncomeAfterPayrollDeductions: number;
   totalTaxFreeIncome: number;
   totalSocialSecurityIncome: number;
+  /** Spouse-attributed totals — undefined/0 when no spouse income exists */
+  spouseTotalIncome?: number;
+  spouseTotalSocialSecurityIncome?: number;
+  spouseTotalTaxFreeIncome?: number;
   perIncomeData: Record<string, IncomeData>;
 }
 
@@ -133,22 +151,31 @@ export class Incomes {
     const autoIncomes = activeIncomes.filter((inc) => inc.isAutoWithholding());
     if (autoIncomes.length === 0) return;
 
-    const totalExpectedAnnualIncome = activeIncomes.reduce((sum, inc) => sum + inc.getExpectedAnnualAmount(), 0);
-
     const incomeTaxConfig = countryConfig.incomeTax[filingStatus];
     const brackets: TaxBracket[] = incomeTaxConfig?.brackets ?? [];
     const standardDeduction = incomeTaxConfig?.standardDeduction ?? 0;
 
-    const taxableIncome = Math.max(0, totalExpectedAnnualIncome - standardDeduction);
-    let expectedTax = 0;
-    for (const bracket of brackets) {
-      if (taxableIncome <= bracket.min) break;
-      expectedTax += (Math.min(taxableIncome, bracket.max) - bracket.min) * bracket.rate;
-    }
+    const computeEffectiveRate = (ownerIncomes: Income[]): number => {
+      const total = ownerIncomes.reduce((sum, inc) => sum + inc.getExpectedAnnualAmount(), 0);
+      if (total === 0) return 0;
+      const hasSpouse = simulationState.spouseAge !== undefined;
+      const perOwnerDeduction = hasSpouse ? standardDeduction / 2 : standardDeduction;
+      const taxableIncome = Math.max(0, total - perOwnerDeduction);
+      let expectedTax = 0;
+      for (const bracket of brackets) {
+        if (taxableIncome <= bracket.min) break;
+        expectedTax += (Math.min(taxableIncome, bracket.max) - bracket.min) * bracket.rate;
+      }
+      return (expectedTax / total) * 100;
+    };
 
-    const effectiveRatePercent = totalExpectedAnnualIncome > 0 ? (expectedTax / totalExpectedAnnualIncome) * 100 : 0;
+    const primaryIncomes = activeIncomes.filter((inc) => inc.getOwner() === 'primary');
+    const spouseIncomes = activeIncomes.filter((inc) => inc.getOwner() === 'spouse');
+    const primaryRate = computeEffectiveRate(primaryIncomes);
+    const spouseRate = computeEffectiveRate(spouseIncomes);
+
     for (const income of autoIncomes) {
-      income.setAutoWithholdingRate(effectiveRatePercent);
+      income.setAutoWithholdingRate(income.getOwner() === 'spouse' ? spouseRate : primaryRate);
     }
   }
 }
@@ -156,6 +183,7 @@ export class Incomes {
 export interface IncomeData {
   id: string;
   name: string;
+  owner: 'primary' | 'spouse';
   income: number;
   amountWithheld: number;
   ficaTax: number;
@@ -169,6 +197,7 @@ export class Income {
   private hasOneTimeIncomeOccurred: boolean;
   private id: string;
   private name: string;
+  private owner: 'primary' | 'spouse';
   private amount: number;
   private growthRate: number | undefined;
   private growthLimit: number | undefined;
@@ -186,6 +215,7 @@ export class Income {
     this.hasOneTimeIncomeOccurred = false;
     this.id = data.id;
     this.name = data.name;
+    this.owner = data.owner ?? 'primary';
     this.amount = data.amount;
     this.growthRate = data.growth?.growthRate;
     this.growthLimit = data.growth?.growthLimit;
@@ -197,6 +227,10 @@ export class Income {
     this.autoWithholding = data.taxes.autoWithholding ?? false;
     this.countryConfig = countryConfig;
     this.incomeTypeConfig = countryConfig.incomeTypes.find((t) => t.id === data.taxes.incomeType);
+  }
+
+  getOwner(): 'primary' | 'spouse' {
+    return this.owner;
   }
 
   isAutoWithholding(): boolean {
@@ -233,9 +267,9 @@ export class Income {
 
         const growthLimit = this.growthLimit;
         if (growthLimit !== undefined && realGrowthRate > 0) {
-          annualAmount = Math.min(annualAmount, growthLimit);
+          annualAmount = Math.min(annualAmount, growthLimit * timesToApplyPerYear);
         } else if (growthLimit !== undefined && realGrowthRate < 0) {
-          annualAmount = Math.max(annualAmount, growthLimit);
+          annualAmount = Math.max(annualAmount, growthLimit * timesToApplyPerYear);
         }
 
         if (timesToApplyPerYear !== 0) this.amount = Math.max(annualAmount / timesToApplyPerYear, 0);
@@ -248,6 +282,7 @@ export class Income {
       return {
         id: this.id,
         name: this.name,
+        owner: this.owner,
         income: 0,
         amountWithheld: 0,
         ficaTax: 0,
@@ -280,6 +315,7 @@ export class Income {
     return {
       id: this.id,
       name: this.name,
+      owner: this.owner,
       income,
       amountWithheld,
       ficaTax,

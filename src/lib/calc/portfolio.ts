@@ -77,11 +77,23 @@ export class PortfolioProcessor {
   }
 
   private createExtraSavingsAccount(): SavingsAccount {
-    return new SavingsAccount({ type: 'savings' as const, id: '54593a0d-7b4f-489d-a5bd-42500afba532', name: 'Extra Savings', balance: 0 });
+    return new SavingsAccount({
+      type: 'savings' as const,
+      id: '54593a0d-7b4f-489d-a5bd-42500afba532',
+      name: 'Extra Savings',
+      balance: 0,
+      owner: 'primary',
+    });
   }
 
   private createRmdSavingsAccount(): SavingsAccount {
-    return new SavingsAccount({ type: 'savings' as const, id: 'd7288042-1f83-4e50-9a6a-b1ef7a6191cc', name: 'RMD Savings', balance: 0 });
+    return new SavingsAccount({
+      type: 'savings' as const,
+      id: 'd7288042-1f83-4e50-9a6a-b1ef7a6191cc',
+      name: 'RMD Savings',
+      balance: 0,
+      owner: 'primary',
+    });
   }
 
   /**
@@ -268,7 +280,8 @@ export class PortfolioProcessor {
     const shortfallRepaid = Math.min(netCashFlow, this.outstandingShortfall);
     this.outstandingShortfall -= shortfallRepaid;
 
-    const age = this.simulationState.time.age;
+    const primaryAge = this.simulationState.time.age;
+    const spouseAge = this.simulationState.spouseAge ?? primaryAge;
 
     this.contributionRules.resetMonthly();
 
@@ -297,7 +310,13 @@ export class PortfolioProcessor {
         return;
       }
 
-      const { contributionAmount, employerMatchAmount } = rule.calculateContribution(surplusCap, contributeToAccount, age, incomesData);
+      const ownerAge = contributeToAccount.getOwner() === 'spouse' ? spouseAge : primaryAge;
+      const { contributionAmount, employerMatchAmount } = rule.calculateContribution(
+        surplusCap,
+        contributeToAccount,
+        ownerAge,
+        incomesData
+      );
       if (contributionAmount <= 0 && employerMatchAmount <= 0) return;
 
       const contributionAllocation = this.getAllocationForContribution(contributionAmount + employerMatchAmount);
@@ -311,7 +330,12 @@ export class PortfolioProcessor {
 
       employerMatchByAccount[contributeToAccountID] = (employerMatchByAccount[contributeToAccountID] ?? 0) + employerMatchAmount;
       employerMatch += employerMatchAmount;
-      rule.recordContribution(contributionAmount, employerMatchAmount, contributeToAccount.getAccountType());
+      rule.recordContribution(
+        contributionAmount,
+        employerMatchAmount,
+        contributeToAccount.getAccountType(),
+        contributeToAccount.getOwner()
+      );
       remainingToContribute -= contributionAmount;
     };
 

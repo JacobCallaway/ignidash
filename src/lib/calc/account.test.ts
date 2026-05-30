@@ -279,6 +279,7 @@ describe('RMD eligibility', () => {
         id: 'ira-1',
         name: 'IRA',
         balance: 50000,
+        owner: 'primary',
         percentBonds: 20,
       },
       true
@@ -293,6 +294,7 @@ describe('RMD eligibility', () => {
         id: '403b-1',
         name: '403b',
         balance: 50000,
+        owner: 'primary',
         percentBonds: 20,
       },
       true
@@ -311,6 +313,7 @@ describe('RMD eligibility', () => {
       id: 'roth401k-1',
       name: 'Roth 401k',
       balance: 50000,
+      owner: 'primary',
       percentBonds: 20,
       contributionBasis: 40000,
     });
@@ -359,6 +362,7 @@ describe('tax categories', () => {
       id: 'ira-1',
       name: 'IRA',
       balance: 50000,
+      owner: 'primary',
       percentBonds: 20,
     });
     expect(account.taxCategory).toBe('taxDeferred');
@@ -380,6 +384,7 @@ describe('tax categories', () => {
       id: 'roth401k-1',
       name: 'Roth 401k',
       balance: 50000,
+      owner: 'primary',
       percentBonds: 20,
       contributionBasis: 40000,
     });

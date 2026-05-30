@@ -17,6 +17,7 @@ export const incomeValidator = v.object({
   id: v.string(),
   name: v.string(),
   amount: v.number(),
+  owner: v.optional(v.union(v.literal('primary'), v.literal('spouse'))),
   frequency: v.union(
     v.literal('yearly'),
     v.literal('oneTime'),

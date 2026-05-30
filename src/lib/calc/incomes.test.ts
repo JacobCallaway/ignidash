@@ -35,6 +35,7 @@ const createIncomeInput = (overrides: Partial<IncomeInputs> = {}): IncomeInputs 
   id: 'income-1',
   name: 'Salary',
   amount: 10000, // Per period amount
+  owner: 'primary',
   frequency: 'monthly',
   disabled: false,
   timeframe: {
@@ -282,7 +283,7 @@ describe('Income Growth Rate Tests', () => {
       createIncomeInput({
         amount: 10000,
         frequency: 'monthly',
-        growth: { growthRate: 50, growthLimit: 130000 }, // 50% annual growth, max $130k/year
+        growth: { growthRate: 50, growthLimit: 130000 / 12 }, // 50% annual growth, max ~$10,833/month ($130k/year)
       }),
       usConfig
     );
@@ -301,7 +302,7 @@ describe('Income Growth Rate Tests', () => {
       createIncomeInput({
         amount: 10000,
         frequency: 'monthly',
-        growth: { growthRate: -50, growthLimit: 60000 }, // -50% annual, min $60k/year
+        growth: { growthRate: -50, growthLimit: 5000 }, // -50% annual, min $5k/month ($60k/year)
       }),
       usConfig
     );

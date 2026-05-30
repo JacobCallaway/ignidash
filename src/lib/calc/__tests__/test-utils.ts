@@ -41,6 +41,7 @@ export const createSavingsAccount = (overrides?: Partial<AccountInputs & { type:
   id: overrides?.id ?? 'savings-1',
   name: overrides?.name ?? 'Savings Account',
   balance: overrides?.balance ?? 10000,
+  owner: overrides?.owner ?? 'primary',
 });
 
 export const create401kAccount = (overrides?: Partial<AccountInputs & { type: '401k' }>): AccountInputs & { type: '401k' } => ({
@@ -48,6 +49,7 @@ export const create401kAccount = (overrides?: Partial<AccountInputs & { type: '4
   id: overrides?.id ?? '401k-1',
   name: overrides?.name ?? '401k Account',
   balance: overrides?.balance ?? 100000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 20,
 });
 
@@ -56,6 +58,7 @@ export const createIraAccount = (overrides?: Partial<AccountInputs & { type: 'ir
   id: overrides?.id ?? 'ira-1',
   name: overrides?.name ?? 'IRA Account',
   balance: overrides?.balance ?? 50000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 30,
 });
 
@@ -64,6 +67,7 @@ export const createRothIraAccount = (overrides?: Partial<AccountInputs & { type:
   id: overrides?.id ?? 'roth-1',
   name: overrides?.name ?? 'Roth IRA',
   balance: overrides?.balance ?? 50000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 10,
   contributionBasis: overrides?.contributionBasis ?? 40000,
 });
@@ -75,6 +79,7 @@ export const createTaxableBrokerageAccount = (
   id: overrides?.id ?? 'taxable-1',
   name: overrides?.name ?? 'Taxable Brokerage',
   balance: overrides?.balance ?? 75000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 15,
   costBasis: overrides?.costBasis ?? 50000,
 });
@@ -84,6 +89,7 @@ export const createHsaAccount = (overrides?: Partial<AccountInputs & { type: 'hs
   id: overrides?.id ?? 'hsa-1',
   name: overrides?.name ?? 'HSA',
   balance: overrides?.balance ?? 20000,
+  owner: overrides?.owner ?? 'primary',
   percentBonds: overrides?.percentBonds ?? 20,
 });
 
@@ -95,6 +101,7 @@ export const createIncomeInput = (overrides?: Partial<IncomeInputs>): IncomeInpu
   id: overrides?.id ?? 'income-1',
   name: overrides?.name ?? 'Salary',
   amount: overrides?.amount ?? 10000,
+  owner: overrides?.owner ?? 'primary',
   frequency: overrides?.frequency ?? 'monthly',
   disabled: overrides?.disabled ?? false,
   timeframe: overrides?.timeframe ?? {
@@ -112,6 +119,7 @@ export const createWageIncome = (overrides?: {
   id?: string;
   name?: string;
   amount?: number;
+  owner?: IncomeInputs['owner'];
   frequency?: IncomeInputs['frequency'];
   timeframe?: IncomeInputs['timeframe'];
   taxes?: IncomeInputs['taxes'];
@@ -121,6 +129,7 @@ export const createWageIncome = (overrides?: {
   id: overrides?.id ?? 'income-1',
   name: overrides?.name ?? 'Salary',
   amount: overrides?.amount ?? 100000,
+  owner: overrides?.owner ?? 'primary',
   frequency: overrides?.frequency ?? 'yearly',
   timeframe: overrides?.timeframe ?? {
     start: { type: 'now' },
