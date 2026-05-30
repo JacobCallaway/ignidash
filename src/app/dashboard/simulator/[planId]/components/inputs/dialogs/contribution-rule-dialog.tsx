@@ -10,20 +10,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import posthog from 'posthog-js';
 
-import { useAccountsData, useIncomesData, useTimelineData } from '@/hooks/use-convex-data';
+import { useAccountsData, useDebtsData, useIncomesData, useTimelineData } from '@/hooks/use-convex-data';
 import { contributionToConvex } from '@/lib/utils/data-transformers';
 import { DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/catalyst/dialog';
-import {
-  contributionFormSchema,
-  type ContributionInputs,
-  supportsMaxBalance,
-  supportsIncomeAllocation,
-  supportsEmployerMatch,
-  supportsMegaBackdoorRoth,
-  getAccountTypeLimitKey,
-  getAnnualContributionLimit,
-  getAnnualSection415cLimit,
-} from '@/lib/schemas/inputs/contribution-form-schema';
+import { contributionFormSchema, type ContributionInputs, buildContributionHelpers } from '@/lib/schemas/inputs/contribution-form-schema';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import { accountTypeForDisplay } from '@/lib/schemas/inputs/account-form-schema';
 import { calculateAge } from '@/lib/schemas/inputs/timeline-form-schema';
 import NumberInput from '@/components/ui/number-input';
@@ -50,6 +41,15 @@ export default function ContributionRuleDialog({
 }: ContributionRuleDialogProps) {
   const planId = useSelectedPlanId();
   const [selectedContributionRule] = useState(_selectedContributionRule);
+  const countryConfig = useCountryConfig();
+  const {
+    supportsMaxBalance,
+    supportsIncomeAllocation,
+    supportsEmployerMatch,
+    supportsMegaBackdoorRoth,
+    getAnnualContributionLimit,
+    getAnnualSection415cLimit,
+  } = useMemo(() => buildContributionHelpers(countryConfig), [countryConfig]);
 
   const defaultRank = numContributionRules + 1;
   const newContributionRuleDefaultValues = useMemo(
@@ -96,10 +96,18 @@ export default function ContributionRuleDialog({
 
   const contributionType = useWatch({ control, name: 'contributionType' });
   const accountId = useWatch({ control, name: 'accountId' });
+  const watchedDebtId = useWatch({ control, name: 'debtId' });
   const enableMegaBackdoorRoth = useWatch({ control, name: 'enableMegaBackdoorRoth' });
+  // 'percent' mode when employerMatchPercent is set (even if 0); 'fixed' otherwise
+  const [employerMatchMode, setEmployerMatchMode] = useState<'fixed' | 'percent'>(
+    selectedContributionRule?.employerMatchPercent !== undefined ? 'percent' : 'fixed'
+  );
+  // target type: 'account' when accountId is set on existing rule, 'debt' when debtId is set
+  const [targetType, setTargetType] = useState<'account' | 'debt'>(selectedContributionRule?.debtId ? 'debt' : 'account');
 
   const getContributionTypeColSpan = () => {
-    if (contributionType === 'dollarAmount' || contributionType === 'percentRemaining') return 'col-span-1';
+    if (contributionType === 'dollarAmount' || contributionType === 'percentRemaining' || contributionType === 'percentOfIncome')
+      return 'col-span-1';
     return 'col-span-2';
   };
 
@@ -107,12 +115,15 @@ export default function ContributionRuleDialog({
   const accountOptions = Object.entries(accounts).map(([id, account]) => ({ id, name: account.name, type: account.type }));
   const selectedAccount = accountId ? accounts[accountId] : null;
 
+  const { data: debts } = useDebtsData();
+  const debtOptions = Object.entries(debts).map(([id, debt]) => ({ id, name: debt.name }));
+
   const timeline = useTimelineData();
   const currentAge = timeline ? calculateAge(timeline.birthMonth, timeline.birthYear) : 18;
   const selectedAccountAnnualContributionLimit = selectedAccount
     ? enableMegaBackdoorRoth
-      ? getAnnualSection415cLimit(currentAge)
-      : getAnnualContributionLimit(getAccountTypeLimitKey(selectedAccount.type), currentAge)
+      ? getAnnualSection415cLimit(selectedAccount.type, currentAge)
+      : getAnnualContributionLimit(selectedAccount.type, currentAge)
     : null;
 
   const { data: incomes } = useIncomesData();
@@ -127,6 +138,22 @@ export default function ContributionRuleDialog({
       unregister('percentRemaining');
     }
 
+    if (!(contributionType === 'percentOfIncome')) {
+      unregister('percentOfIncome');
+    }
+
+    if (targetType === 'debt') {
+      unregister('accountId');
+      unregister('maxBalance');
+      unregister('incomeId');
+      unregister('employerMatch');
+      unregister('employerMatchPercent');
+      unregister('enableMegaBackdoorRoth');
+      return;
+    }
+
+    unregister('debtId');
+
     if (!(selectedAccount && supportsMaxBalance(selectedAccount.type))) {
       unregister('maxBalance');
     }
@@ -137,15 +164,21 @@ export default function ContributionRuleDialog({
 
     if (!(selectedAccount && supportsEmployerMatch(selectedAccount.type))) {
       unregister('employerMatch');
+      unregister('employerMatchPercent');
+    } else if (employerMatchMode === 'percent') {
+      unregister('employerMatch');
+    } else {
+      unregister('employerMatchPercent');
     }
 
     if (!(selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type))) {
       unregister('enableMegaBackdoorRoth');
     }
-  }, [contributionType, unregister, selectedAccount]);
+  }, [contributionType, unregister, selectedAccount, employerMatchMode, targetType]);
 
   const { error: dollarAmountError } = getFieldState('dollarAmount');
   const { error: percentRemainingError } = getFieldState('percentRemaining');
+  const { error: percentOfIncomeError } = getFieldState('percentOfIncome');
 
   return (
     <>
@@ -164,26 +197,58 @@ export default function ContributionRuleDialog({
             <FieldGroup>
               {(saveError || hasFormErrors) && <ErrorMessageCard errorMessage={saveError || getErrorMessages(errors).join(', ')} />}
               <Divider soft className="hidden sm:block" />
-              <Field>
-                <Label htmlFor="accountId">To Account</Label>
-                <Select {...register('accountId')} id="accountId" name="accountId" defaultValue="" invalid={!!errors.accountId}>
-                  <option value="" disabled>
-                    Select account&hellip;
-                  </option>
-                  {accountOptions.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} | {accountTypeForDisplay(account.type)}
-                    </option>
-                  ))}
-                </Select>
-                {errors.accountId && <ErrorMessage>{errors.accountId?.message}</ErrorMessage>}
-                {selectedAccountAnnualContributionLimit !== null && Number.isFinite(selectedAccountAnnualContributionLimit) && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <Field>
+                  <Label htmlFor="targetType">Target</Label>
+                  <Select id="targetType" value={targetType} onChange={(e) => setTargetType(e.target.value as 'account' | 'debt')}>
+                    <option value="account">Account</option>
+                    <option value="debt">Debt</option>
+                  </Select>
+                </Field>
+                {targetType === 'account' && (
+                  <Field>
+                    <Label htmlFor="accountId">Account</Label>
+                    <Select {...register('accountId')} id="accountId" name="accountId" defaultValue="" invalid={!!errors.accountId}>
+                      <option value="" disabled>
+                        Select&hellip;
+                      </option>
+                      {accountOptions.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name} | {accountTypeForDisplay(account.type)}
+                        </option>
+                      ))}
+                    </Select>
+                    {errors.accountId && <ErrorMessage>{errors.accountId?.message}</ErrorMessage>}
+                  </Field>
+                )}
+                {targetType === 'debt' && (
+                  <Field>
+                    <Label htmlFor="debtId">Debt</Label>
+                    <Select {...register('debtId')} id="debtId" name="debtId" defaultValue="" invalid={!!errors.debtId}>
+                      <option value="" disabled>
+                        Select&hellip;
+                      </option>
+                      {debtOptions.map((debt) => (
+                        <option key={debt.id} value={debt.id}>
+                          {debt.name}
+                        </option>
+                      ))}
+                    </Select>
+                    {errors.debtId && <ErrorMessage>{errors.debtId?.message}</ErrorMessage>}
+                  </Field>
+                )}
+              </div>
+              {targetType === 'account' &&
+                selectedAccountAnnualContributionLimit !== null &&
+                Number.isFinite(selectedAccountAnnualContributionLimit) && (
                   <Description>
                     You can contribute up to <strong>{formatCompactCurrency(selectedAccountAnnualContributionLimit, 0)}</strong> per year.
                   </Description>
                 )}
-              </Field>
-              {selectedAccount && supportsIncomeAllocation(selectedAccount.type) && (
+              {targetType === 'debt' && watchedDebtId && (
+                <Description>Extra payments are capped at the remaining debt balance each month.</Description>
+              )}
+              {targetType === 'account' && selectedAccount && supportsIncomeAllocation(selectedAccount.type) && (
                 <>
                   <Field>
                     <Label htmlFor="incomeId">From Income</Label>
@@ -210,7 +275,8 @@ export default function ContributionRuleDialog({
                     name="contributionType"
                     invalid={!!errors.contributionType}
                   >
-                    <option value="dollarAmount">Dollar Amount</option>
+                    <option value="dollarAmount">Fixed Amount</option>
+                    <option value="percentOfIncome">% of Income</option>
                     <option value="percentRemaining">% Remaining</option>
                     <option value="unlimited">Unlimited</option>
                   </Select>
@@ -231,6 +297,21 @@ export default function ContributionRuleDialog({
                     {dollarAmountError && <ErrorMessage>{dollarAmountError.message}</ErrorMessage>}
                   </Field>
                 )}
+                {contributionType === 'percentOfIncome' && (
+                  <Field>
+                    <Label htmlFor="percentOfIncome">% of Income</Label>
+                    <NumberInput
+                      name="percentOfIncome"
+                      control={control}
+                      id="percentOfIncome"
+                      inputMode="decimal"
+                      placeholder="5%"
+                      suffix="%"
+                      autoFocus={selectedContributionRule !== null}
+                    />
+                    {percentOfIncomeError && <ErrorMessage>{percentOfIncomeError.message}</ErrorMessage>}
+                  </Field>
+                )}
                 {contributionType === 'percentRemaining' && (
                   <Field>
                     <Label htmlFor="percentRemaining">% Remaining</Label>
@@ -247,7 +328,7 @@ export default function ContributionRuleDialog({
                   </Field>
                 )}
               </div>
-              {selectedAccount && supportsMaxBalance(selectedAccount.type) && (
+              {targetType === 'account' && selectedAccount && supportsMaxBalance(selectedAccount.type) && (
                 <Field>
                   <Label htmlFor="maxBalance" className="flex w-full items-center justify-between">
                     <span className="whitespace-nowrap">Maximum Balance</span>
@@ -265,25 +346,58 @@ export default function ContributionRuleDialog({
                   <Description>Stop contributing to this account once it reaches this balance.</Description>
                 </Field>
               )}
-              {selectedAccount && supportsEmployerMatch(selectedAccount.type) && (
-                <Field>
-                  <Label htmlFor="employerMatch" className="flex w-full items-center justify-between">
-                    <span className="whitespace-nowrap">Employer Match</span>
-                    <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
-                  </Label>
-                  <NumberInput
-                    name="employerMatch"
-                    control={control}
-                    id="employerMatch"
-                    inputMode="decimal"
-                    placeholder={formatCurrencyPlaceholder(7000)}
-                    prefix={getCurrencySymbol()}
-                  />
-                  {errors.employerMatch && <ErrorMessage>{errors.employerMatch?.message}</ErrorMessage>}
-                  <Description>Employer will match your contributions dollar-for-dollar up to this amount.</Description>
-                </Field>
+              {targetType === 'account' && selectedAccount && supportsEmployerMatch(selectedAccount.type) && (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <Field>
+                    <Label htmlFor="employerMatchMode" className="flex w-full items-center justify-between">
+                      <span className="whitespace-nowrap">Employer Match</span>
+                      <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
+                    </Label>
+                    <Select
+                      id="employerMatchMode"
+                      value={employerMatchMode}
+                      onChange={(e) => setEmployerMatchMode(e.target.value as 'fixed' | 'percent')}
+                    >
+                      <option value="fixed">Fixed Amount</option>
+                      <option value="percent">% of Income</option>
+                    </Select>
+                  </Field>
+                  {employerMatchMode === 'fixed' && (
+                    <Field>
+                      <Label htmlFor="employerMatch">&nbsp;</Label>
+                      <NumberInput
+                        name="employerMatch"
+                        control={control}
+                        id="employerMatch"
+                        inputMode="decimal"
+                        placeholder={formatCurrencyPlaceholder(7000)}
+                        prefix={getCurrencySymbol()}
+                      />
+                      {errors.employerMatch && <ErrorMessage>{errors.employerMatch?.message}</ErrorMessage>}
+                    </Field>
+                  )}
+                  {employerMatchMode === 'percent' && (
+                    <Field>
+                      <Label htmlFor="employerMatchPercent">&nbsp;</Label>
+                      <NumberInput
+                        name="employerMatchPercent"
+                        control={control}
+                        id="employerMatchPercent"
+                        inputMode="decimal"
+                        placeholder="3%"
+                        suffix="%"
+                      />
+                      {errors.employerMatchPercent && <ErrorMessage>{errors.employerMatchPercent?.message}</ErrorMessage>}
+                    </Field>
+                  )}
+                  <Description className="col-span-2">
+                    {employerMatchMode === 'percent'
+                      ? 'Employer contributes this percentage of the linked income each year, independent of your contribution.'
+                      : 'Employer will match your contributions dollar-for-dollar up to this annual amount.'}
+                  </Description>
+                </div>
               )}
-              {selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type) && (
+              {targetType === 'account' && selectedAccount && supportsMegaBackdoorRoth(selectedAccount.type) && (
                 <>
                   <Divider soft />
                   <SwitchField>

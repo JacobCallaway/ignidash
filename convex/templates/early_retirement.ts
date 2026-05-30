@@ -2,6 +2,7 @@ import type { Doc } from '../_generated/dataModel';
 
 export const earlyRetirementTemplate: Omit<Doc<'plans'>, '_id' | '_creationTime' | 'userId' | 'name'> = {
   isDefault: false,
+  country: 'US',
   timeline: {
     lifeExpectancy: 87,
     birthMonth: 1,

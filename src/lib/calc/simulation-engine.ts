@@ -9,6 +9,7 @@
 
 import type { SimulatorInputs } from '@/lib/schemas/inputs/simulator-schema';
 import { type TimelineInputs, type RetirementStrategyInputs, calculatePreciseAge } from '@/lib/schemas/inputs/timeline-form-schema';
+import { getCountryConfig } from '@/lib/country';
 
 import type { ReturnsProvider } from './returns-providers/returns-provider';
 import { StochasticReturnsProvider } from './returns-providers/stochastic-returns-provider';
@@ -74,11 +75,13 @@ export interface SimulationContext {
   readonly endDate: Date;
   readonly retirementStrategy: RetirementStrategyInputs;
   readonly rmdAge: number;
+  readonly spouseStartAge?: number;
 }
 
 /** Mutable simulation state that evolves each month */
 export interface SimulationState {
   time: { date: Date; age: number; year: number; month: number };
+  spouseAge?: number;
   portfolio: Portfolio;
   phase: PhaseData | null;
   annualData: { expenses: ExpensesData[]; debts: DebtsData[]; physicalAssets: PhysicalAssetsData[] };
@@ -89,21 +92,78 @@ export class FinancialSimulationEngine {
   constructor(protected readonly inputs: SimulatorInputs) {}
 
   /**
-   * Runs a complete financial simulation from start to end date
+   * Runs a complete financial simulation from start to end date.
+   *
+   * For the 'earliestPossible' strategy, automatically retries with a progressively later
+   * minimum retirement age when bankruptcy is detected before life expectancy. This corrects
+   * for cases where the feasibility check is overly optimistic (e.g. due to tax estimation
+   * approximations) so the returned result is always solvent or clearly impossible.
+   *
    * @param returnsProvider - Strategy for generating investment returns each year
    * @param timeline - User's timeline inputs (birth date, retirement, life expectancy)
    * @returns Complete simulation result with time-series data and context
    */
   runSimulation(returnsProvider: ReturnsProvider, timeline: TimelineInputs): SimulationResult {
-    // Init context and state
-    const simulationContext: SimulationContext = this.initSimulationContext(timeline);
-    const simulationState: SimulationState = this.initSimulationState(simulationContext);
+    if (timeline.retirementStrategy.type !== 'earliestPossible') {
+      return this.runSimulationCore(returnsProvider, timeline);
+    }
 
-    const incomes = new Incomes(Object.values(this.inputs.incomes));
+    let minRetirementAge: number | undefined;
+    let result = this.runSimulationCore(returnsProvider, timeline, minRetirementAge);
+
+    // Retry with a later minimum retirement age until the plan is solvent or we reach life expectancy
+    while (true) {
+      const bankruptcyAge = this.detectBankruptcyDuringRetirement(result);
+      if (bankruptcyAge === null) break;
+
+      const retirementAge = this.getRetirementAgeFromResult(result);
+      if (retirementAge === null) break;
+
+      const nextMinAge = Math.floor(retirementAge) + 1;
+      if (nextMinAge >= timeline.lifeExpectancy) break;
+      if (minRetirementAge !== undefined && nextMinAge <= minRetirementAge) break;
+
+      minRetirementAge = nextMinAge;
+      result = this.runSimulationCore(returnsProvider, timeline, minRetirementAge);
+    }
+
+    return result;
+  }
+
+  /** Returns the age at which the portfolio first hits zero during retirement, or null if solvent. */
+  private detectBankruptcyDuringRetirement(result: SimulationResult): number | null {
+    let inRetirement = false;
+    for (const point of result.data) {
+      if (point.phase?.name === 'retirement') inRetirement = true;
+      if (inRetirement && point.portfolio.totalValue <= 0.01) return point.age;
+    }
+    return null;
+  }
+
+  /** Returns the age at which the simulation first entered retirement, or null. */
+  private getRetirementAgeFromResult(result: SimulationResult): number | null {
+    for (const point of result.data) {
+      if (point.phase?.name === 'retirement') return point.age;
+    }
+    return null;
+  }
+
+  private runSimulationCore(returnsProvider: ReturnsProvider, timeline: TimelineInputs, minRetirementAge?: number): SimulationResult {
+    const countryConfig = getCountryConfig(this.inputs.country);
+
+    // Init context and state
+    const simulationContext: SimulationContext = this.initSimulationContext(timeline, countryConfig);
+    const simulationState: SimulationState = this.initSimulationState(simulationContext, countryConfig);
+
+    const incomes = new Incomes(Object.values(this.inputs.incomes), countryConfig);
     const expenses = new Expenses(Object.values(this.inputs.expenses));
     const debts = new Debts(Object.values(this.inputs.debts));
     const physicalAssets = new PhysicalAssets(Object.values(this.inputs.physicalAssets));
-    const contributionRules = new ContributionRules(Object.values(this.inputs.contributionRules), this.inputs.baseContributionRule);
+    const contributionRules = new ContributionRules(
+      Object.values(this.inputs.contributionRules),
+      this.inputs.baseContributionRule,
+      countryConfig
+    );
 
     const resultData: Array<SimulationDataPoint> = [this.initSimulationDataPoint(simulationState, debts, physicalAssets)];
 
@@ -113,11 +173,28 @@ export class FinancialSimulationEngine {
     const expensesProcessor = new ExpensesProcessor(simulationState, expenses);
     const debtsProcessor = new DebtsProcessor(simulationState, debts);
     const physicalAssetsProcessor = new PhysicalAssetsProcessor(simulationState, physicalAssets);
-    const portfolioProcessor = new PortfolioProcessor(simulationState, simulationContext, contributionRules, this.inputs.glidePath);
-    const taxProcessor = new TaxProcessor(simulationState, this.inputs.taxSettings.filingStatus);
+    const portfolioProcessor = new PortfolioProcessor(
+      simulationState,
+      simulationContext,
+      contributionRules,
+      countryConfig,
+      this.inputs.glidePath,
+      debts
+    );
+    const taxProcessor = new TaxProcessor(simulationState, this.inputs.taxSettings.filingStatus, countryConfig);
 
     // Init phase identifier
-    const phaseIdentifier = new PhaseIdentifier(simulationState, timeline);
+    const phaseIdentifier = new PhaseIdentifier(
+      simulationState,
+      timeline,
+      this.inputs.marketAssumptions,
+      countryConfig,
+      physicalAssets,
+      Object.values(this.inputs.expenses),
+      Object.values(this.inputs.incomes),
+      this.inputs.glidePath,
+      minRetirementAge
+    );
     simulationState.phase = phaseIdentifier.getCurrentPhase();
 
     while (simulationState.time.date < simulationContext.endDate) {
@@ -126,6 +203,10 @@ export class FinancialSimulationEngine {
       // Process RMDs at the start of each year before other transactions
       if (simulationState.time.age >= simulationContext.rmdAge && simulationState.time.month % 12 === 1)
         portfolioProcessor.processRequiredMinimumDistributions();
+
+      // Update automatic withholding rates at the start of each year based on expected income and tax brackets
+      if (simulationState.time.month % 12 === 1)
+        incomes.updateAutoWithholdingRates(simulationState, this.inputs.taxSettings.filingStatus, countryConfig);
 
       // Process one month of simulation
       const { inflationRate: monthlyInflationRate } = returnsProcessor.process();
@@ -226,6 +307,10 @@ export class FinancialSimulationEngine {
 
     simulationState.time.age = simulationContext.startAge + monthsElapsed / 12;
     simulationState.time.year = monthsElapsed / 12;
+
+    if (simulationContext.spouseStartAge !== undefined) {
+      simulationState.spouseAge = simulationContext.spouseStartAge + monthsElapsed / 12;
+    }
   }
 
   /**
@@ -282,29 +367,37 @@ export class FinancialSimulationEngine {
     return { taxesData, portfolioData, discretionaryExpense };
   }
 
-  private initSimulationContext(timeline: TimelineInputs): SimulationContext {
+  private initSimulationContext(timeline: TimelineInputs, countryConfig: ReturnType<typeof getCountryConfig>): SimulationContext {
     const startAge = calculatePreciseAge(timeline.birthMonth, timeline.birthYear);
-    const endAge = timeline.lifeExpectancy;
 
-    const yearsToSimulate = Math.ceil(endAge - startAge);
+    let spouseStartAge: number | undefined;
+    if (timeline.spouseBirthYear !== undefined && timeline.spouseBirthMonth !== undefined) {
+      spouseStartAge = calculatePreciseAge(timeline.spouseBirthMonth, timeline.spouseBirthYear);
+    }
+
+    // Extend simulation to cover whichever person lives longer
+    const primaryYearsRemaining = timeline.lifeExpectancy - startAge;
+    const spouseYearsRemaining =
+      spouseStartAge !== undefined && timeline.spouseLifeExpectancy !== undefined ? timeline.spouseLifeExpectancy - spouseStartAge : 0;
+    const yearsToSimulate = Math.ceil(Math.max(primaryYearsRemaining, spouseYearsRemaining));
+    const endAge = startAge + yearsToSimulate;
 
     const startDate = new Date();
     const endDate = new Date(startDate.getFullYear() + yearsToSimulate, startDate.getMonth(), 1);
 
     const retirementStrategy = timeline.retirementStrategy;
+    const rmdAge = countryConfig.rmd?.getStartAge(timeline.birthYear) ?? Infinity;
 
-    // SECURE Act 2.0: RMD age is 75 for those born 1960+, otherwise 73
-    const rmdAge = timeline.birthYear >= 1960 ? 75 : 73;
-
-    return { startAge, endAge, yearsToSimulate, startDate, endDate, retirementStrategy, rmdAge };
+    return { startAge, endAge, yearsToSimulate, startDate, endDate, retirementStrategy, rmdAge, spouseStartAge };
   }
 
-  private initSimulationState(simulationContext: SimulationContext): SimulationState {
-    const { startDate, startAge: age } = simulationContext;
+  private initSimulationState(simulationContext: SimulationContext, countryConfig: ReturnType<typeof getCountryConfig>): SimulationState {
+    const { startDate, startAge: age, spouseStartAge } = simulationContext;
 
     return {
       time: { date: new Date(startDate), age, year: 0, month: 0 },
-      portfolio: new Portfolio(Object.values(this.inputs.accounts)),
+      spouseAge: spouseStartAge,
+      portfolio: new Portfolio(Object.values(this.inputs.accounts), countryConfig),
       phase: null,
       annualData: { expenses: [], debts: [], physicalAssets: [] },
     };

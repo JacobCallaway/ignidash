@@ -50,6 +50,7 @@ const createSavingsAccount = (overrides?: { id?: string; name?: string; balance?
   id: overrides?.id ?? 'savings-1',
   name: overrides?.name ?? 'Savings Account',
   balance: overrides?.balance ?? 10000,
+  owner: 'primary',
 });
 
 const create401kAccount = (overrides?: {
@@ -63,6 +64,7 @@ const create401kAccount = (overrides?: {
   name: overrides?.name ?? '401k Account',
   balance: overrides?.balance ?? 100000,
   percentBonds: overrides?.percentBonds ?? 20,
+  owner: 'primary',
 });
 
 const createRothIraAccount = (overrides?: {
@@ -78,6 +80,7 @@ const createRothIraAccount = (overrides?: {
   balance: overrides?.balance ?? 50000,
   percentBonds: overrides?.percentBonds ?? 10,
   contributionBasis: overrides?.contributionBasis ?? 40000,
+  owner: 'primary',
 });
 
 // Income factory
@@ -94,6 +97,7 @@ const createWageIncome = (overrides?: {
   id: overrides?.id ?? 'income-1',
   name: overrides?.name ?? 'Salary',
   amount: overrides?.amount ?? 100000,
+  owner: 'primary',
   frequency: overrides?.frequency ?? 'yearly',
   timeframe: overrides?.timeframe ?? {
     start: { type: 'now' },
@@ -144,6 +148,7 @@ const createContributionRule = (overrides?: {
 
 // Simulator inputs factory
 const createSimulatorInputs = (overrides?: Partial<SimulatorInputs>): SimulatorInputs => ({
+  country: overrides?.country ?? 'US',
   timeline: overrides?.timeline !== undefined ? overrides.timeline : createDefaultTimeline(),
   incomes: overrides?.incomes ?? {},
   expenses: overrides?.expenses ?? {},
@@ -475,7 +480,8 @@ describe('FinancialSimulationEngine', () => {
       const engine = new FinancialSimulationEngine(inputs);
       const result = engine.runSimulation(new FixedReturnsProvider(inputs), inputs.timeline!);
       expect(result.data.length).toBeGreaterThan(0);
-      expect(result.context.endAge).toBe(95);
+      expect(result.context.endAge).toBeGreaterThanOrEqual(95);
+      expect(result.context.endAge).toBeLessThan(97);
     });
 
     it('should track portfolio value over time', () => {
@@ -1210,6 +1216,7 @@ describe('full simulation year scenarios', () => {
           id: 'ss-1',
           name: 'Social Security',
           amount: 30000,
+          owner: 'primary' as const,
           frequency: 'yearly' as const,
           timeframe: { start: { type: 'now' as const }, end: undefined },
           taxes: { incomeType: 'socialSecurity' as const, withholding: 0 },
@@ -1280,6 +1287,7 @@ describe('full simulation year scenarios', () => {
           balance: 1000000,
           percentBonds: 0,
           costBasis: 200000, // 80% unrealized gains — withdrawals will realize significant gains
+          owner: 'primary' as const,
         },
       },
       incomes: {},

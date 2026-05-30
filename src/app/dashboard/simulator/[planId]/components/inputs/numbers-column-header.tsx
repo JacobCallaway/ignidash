@@ -1,20 +1,28 @@
 'use client';
 
 import { useState, lazy, Suspense } from 'react';
-import { CalculatorIcon, TrendingUpIcon, BanknoteXIcon, HourglassIcon } from 'lucide-react';
+import { CalculatorIcon, TrendingUpIcon, BanknoteXIcon, HourglassIcon, SettingsIcon } from 'lucide-react';
 
 import IconButton from '@/components/ui/icon-button';
 import PageLoading from '@/components/ui/page-loading';
 import Drawer from '@/components/ui/drawer';
 import ColumnHeader from '@/components/ui/column-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePlanName, useMarketAssumptionsData, useTaxSettingsData, useTimelineData } from '@/hooks/use-convex-data';
+import {
+  usePlanName,
+  useMarketAssumptionsData,
+  useTaxSettingsData,
+  useTimelineData,
+  useSimulationSettingsData,
+} from '@/hooks/use-convex-data';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
 import { useHasOpenedTaxSettings, useUpdateHasOpenedTaxSettings } from '@/lib/stores/simulator-store';
+import { useCountryConfig } from '@/hooks/use-country-config';
 
 const ExpectedReturnsDrawer = lazy(() => import('./drawers/expected-returns-drawer'));
 const TaxSettingsDrawer = lazy(() => import('./drawers/tax-settings-drawer'));
 const TimelineDrawer = lazy(() => import('./drawers/timeline-drawer'));
+const SimulationSettingsDrawer = lazy(() => import('../outputs/drawers/simulation-settings-drawer'));
 
 export default function NumbersColumnHeader() {
   const planId = useSelectedPlanId();
@@ -23,10 +31,13 @@ export default function NumbersColumnHeader() {
   const [expectedReturnsOpen, setExpectedReturnsOpen] = useState(false);
   const [taxSettingsOpen, setTaxSettingsOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [simulationSettingsOpen, setSimulationSettingsOpen] = useState(false);
 
   const marketAssumptions = useMarketAssumptionsData();
   const taxSettings = useTaxSettingsData();
   const timeline = useTimelineData();
+  const simulationSettings = useSimulationSettingsData();
+  const countryConfig = useCountryConfig();
 
   const expectedReturnsTitleComponent = (
     <div className="flex items-center gap-2">
@@ -44,6 +55,12 @@ export default function NumbersColumnHeader() {
     <div className="flex items-center gap-2">
       <HourglassIcon className="text-primary size-6 shrink-0" aria-hidden="true" />
       <span>Timeline</span>
+    </div>
+  );
+  const simulationSettingsTitleComponent = (
+    <div className="flex items-center gap-2">
+      <SettingsIcon className="text-primary size-6 shrink-0" aria-hidden="true" />
+      <span>Simulation Settings</span>
     </div>
   );
 
@@ -73,6 +90,12 @@ export default function NumbersColumnHeader() {
               surfaceColor="emphasized"
             />
             <IconButton icon={HourglassIcon} label="Timeline" onClick={() => setTimelineOpen(true)} surfaceColor="emphasized" />
+            <IconButton
+              icon={SettingsIcon}
+              label="Simulation Settings"
+              onClick={() => setSimulationSettingsOpen(true)}
+              surfaceColor="emphasized"
+            />
           </div>
         }
         className="left-76 w-96 border-r group-data-[state=collapsed]/sidebar:left-20"
@@ -85,12 +108,17 @@ export default function NumbersColumnHeader() {
       </Drawer>
       <Drawer open={taxSettingsOpen} setOpen={setTaxSettingsOpen} title={taxSettingsTitleComponent}>
         <Suspense fallback={<PageLoading message="Loading Tax Settings" />}>
-          <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} />
+          <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} countryConfig={countryConfig} />
         </Suspense>
       </Drawer>
       <Drawer open={timelineOpen} setOpen={setTimelineOpen} title={timelineTitleComponent}>
         <Suspense fallback={<PageLoading message="Loading Timeline" />}>
           <TimelineDrawer setOpen={setTimelineOpen} timeline={timeline} />
+        </Suspense>
+      </Drawer>
+      <Drawer open={simulationSettingsOpen} setOpen={setSimulationSettingsOpen} title={simulationSettingsTitleComponent}>
+        <Suspense fallback={<PageLoading message="Loading Simulation Settings" />}>
+          <SimulationSettingsDrawer setOpen={setSimulationSettingsOpen} simulationSettings={simulationSettings} />
         </Suspense>
       </Drawer>
     </>

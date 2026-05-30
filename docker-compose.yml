@@ -7,6 +7,8 @@ services:
       - '3211:3211'
     volumes:
       - convex-data:/convex/data
+    mem_limit: 2g
+    memswap_limit: 2g
     environment:
       - RUST_LOG=info
       - RUST_BACKTRACE=1
@@ -35,7 +37,13 @@ services:
     stop_grace_period: 10s
 
   app:
-    image: ghcr.io/schelskedevco/ignidash:stable
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
+        NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-http://localhost:3211}
+    image: ignidash:local
     restart: unless-stopped
     ports:
       - '3000:3000'

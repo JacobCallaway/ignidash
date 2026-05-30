@@ -17,6 +17,7 @@ export const incomeValidator = v.object({
   id: v.string(),
   name: v.string(),
   amount: v.number(),
+  owner: v.optional(v.union(v.literal('primary'), v.literal('spouse'))),
   frequency: v.union(
     v.literal('yearly'),
     v.literal('oneTime'),
@@ -36,14 +37,9 @@ export const incomeValidator = v.object({
     })
   ),
   taxes: v.object({
-    incomeType: v.union(
-      v.literal('wage'),
-      v.literal('exempt'),
-      v.literal('selfEmployment'),
-      v.literal('socialSecurity'),
-      v.literal('pension')
-    ),
+    incomeType: v.string(),
     withholding: v.optional(v.number()),
+    autoWithholding: v.optional(v.boolean()),
   }),
   disabled: v.boolean(),
 });

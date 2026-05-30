@@ -8,6 +8,7 @@
 import { formatCompactCurrency, formatPercentage } from '@/lib/utils/number-formatters';
 import type { TimePoint, Growth, Frequency } from '@/lib/schemas/inputs/income-expenses-shared-schemas';
 import type { IncomeType } from '@/lib/schemas/inputs/income-form-schema';
+import type { CountryConfig } from '@/lib/country/types';
 import type { KeyMetrics } from '@/lib/types/key-metrics';
 
 export const timeFrameForDisplay = (startTimePoint: TimePoint, endTimePoint?: TimePoint) => {
@@ -72,13 +73,14 @@ export const physicalAssetTimeFrameForDisplay = (startTimePoint: TimePoint, endT
   return endLabel ? `${startLabel} → ${endLabel}` : startLabel;
 };
 
-export const growthForDisplay = (growthRate: Growth['growthRate'], growthLimit: Growth['growthLimit']) => {
+export const growthForDisplay = (growthRate: Growth['growthRate'], growthLimit: Growth['growthLimit'], frequency?: Frequency) => {
   if (growthRate === undefined) return 'No Growth';
 
   const rate = Number(growthRate).toFixed(1);
   if (growthLimit === undefined) return `Rate: ${rate}%, No Limit`;
 
-  return `Rate: ${rate}%, Limit: ${formatCompactCurrency(growthLimit, 0)}`;
+  const freqLabel = frequency ? ` ${frequencyForDisplay(frequency)}` : '';
+  return `Rate: ${rate}%, Limit: ${formatCompactCurrency(growthLimit, 0)}${freqLabel}`;
 };
 
 export const frequencyForDisplay = (frequency: Frequency) => {
@@ -103,21 +105,24 @@ export const maxBalanceForDisplay = (maxBalance: number | undefined) => {
   return `At Balance of ${formatCompactCurrency(maxBalance, 0)}`;
 };
 
-export const incomeTaxTreatmentForDisplay = (type: IncomeType, withholding: number | undefined) => {
-  const typeLabels: Record<IncomeType, string> = {
-    wage: 'Wage',
-    exempt: 'Tax-Free',
-    selfEmployment: 'Self-Employment',
-    socialSecurity: 'Social Security',
-    pension: 'Pension',
-  };
+const US_INCOME_TYPE_LABELS: Record<string, string> = {
+  wage: 'Wage',
+  exempt: 'Tax-Free',
+  selfEmployment: 'Self-Employment',
+  socialSecurity: 'Social Security',
+  pension: 'Pension',
+};
 
-  const typeLabel = typeLabels[type];
+export const incomeTaxTreatmentForDisplay = (
+  type: IncomeType,
+  withholding: number | undefined,
+  autoWithholding?: boolean,
+  countryConfig?: CountryConfig
+) => {
+  const typeLabel = countryConfig?.incomeTypes.find((t) => t.id === type)?.label ?? US_INCOME_TYPE_LABELS[type] ?? type;
 
-  if (withholding === undefined) {
-    return typeLabel;
-  }
-
+  if (autoWithholding) return `${typeLabel}, Auto`;
+  if (withholding === undefined) return typeLabel;
   return `${typeLabel}, ${Number(withholding).toFixed(0)}% Withheld`;
 };
 

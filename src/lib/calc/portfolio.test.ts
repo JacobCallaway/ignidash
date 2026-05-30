@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type { GlidePathInputs } from '@/lib/schemas/inputs/glide-path-form-schema';
+import { usConfig } from '@/lib/country/configs/us';
 
 import { Portfolio, PortfolioProcessor } from './portfolio';
 import { ContributionRules } from './contribution-rules';
@@ -616,6 +617,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -646,6 +648,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -670,6 +673,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         { id: 'glide-path-1', enabled: false, endTimePoint: { type: 'customAge', age: 65 }, targetBondAllocation: 60 }
       );
 
@@ -700,6 +704,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -734,6 +739,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([createContributionRule({ accountId: '401k-1' })], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -775,6 +781,7 @@ describe('PortfolioProcessor', () => {
         state,
         createMockSimulationContext({ startAge: 35 }),
         new ContributionRules([], { type: 'spend' }),
+        usConfig,
         glidePath
       );
 
@@ -1320,6 +1327,7 @@ describe('PortfolioProcessor', () => {
           'income-salary': {
             id: 'income-salary',
             name: 'Salary',
+            owner: 'primary' as const,
             income: 7000,
             amountWithheld: 0,
             ficaTax: 0,
@@ -1330,6 +1338,7 @@ describe('PortfolioProcessor', () => {
           'income-commission': {
             id: 'income-commission',
             name: 'Commission',
+            owner: 'primary' as const,
             income: 3000,
             amountWithheld: 0,
             ficaTax: 0,
@@ -1389,6 +1398,7 @@ describe('PortfolioProcessor', () => {
           'income-1': {
             id: 'income-1',
             name: 'Part-Time Job',
+            owner: 'primary' as const,
             income: 200, // $200/mo — both rules are capped to this
             amountWithheld: 0,
             ficaTax: 0,
@@ -1399,6 +1409,7 @@ describe('PortfolioProcessor', () => {
           'income-2': {
             id: 'income-2',
             name: 'Main Salary',
+            owner: 'primary' as const,
             income: 1800, // provides cash flow but not linked to any rule
             amountWithheld: 0,
             ficaTax: 0,
@@ -1449,6 +1460,7 @@ describe('PortfolioProcessor', () => {
           'income-1': {
             id: 'income-1',
             name: 'Side Job',
+            owner: 'primary' as const,
             income: 500,
             amountWithheld: 0,
             ficaTax: 0,

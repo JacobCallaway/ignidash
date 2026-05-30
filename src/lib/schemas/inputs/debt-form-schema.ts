@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { currencyFieldForbidsZero, percentageField } from '@/lib/utils/zod-utils';
+import { currencyFieldForbidsZero, optionalCurrencyFieldForbidsZero, percentageField } from '@/lib/utils/zod-utils';
 import { timePointSchema } from './income-expenses-shared-schemas';
 
 export const compoundingFrequencySchema = z.enum(['daily', 'monthly']);
@@ -15,7 +15,8 @@ export const debtFormSchema = z
     interestType: z.enum(['simple', 'compound']),
     compoundingFrequency: compoundingFrequencySchema.optional(),
     startDate: timePointSchema,
-    monthlyPayment: currencyFieldForbidsZero('Monthly payment must be greater than zero'),
+    paymentType: z.enum(['fixed', 'minimumPayment']).optional(),
+    monthlyPayment: optionalCurrencyFieldForbidsZero('Monthly payment must be greater than zero'),
     disabled: z.boolean().optional(),
     syncedFinanceId: z.string().optional(),
   })
@@ -30,6 +31,19 @@ export const debtFormSchema = z
     {
       message: 'Compounding frequency is required for compound interest',
       path: ['compoundingFrequency'],
+    }
+  )
+  .refine(
+    (data) => {
+      const pt = data.paymentType ?? 'fixed';
+      if (pt === 'fixed') {
+        return data.monthlyPayment !== undefined && data.monthlyPayment > 0;
+      }
+      return true;
+    },
+    {
+      message: 'Monthly payment is required for fixed payment type',
+      path: ['monthlyPayment'],
     }
   );
 

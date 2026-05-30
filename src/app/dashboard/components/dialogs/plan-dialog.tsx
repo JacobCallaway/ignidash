@@ -18,6 +18,7 @@ import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/catalyst/input';
 import { Textarea } from '@/components/catalyst/textarea';
 import { getErrorMessages } from '@/lib/utils/form-utils';
+import { AVAILABLE_COUNTRIES, getCountryConfig } from '@/lib/country';
 
 interface PlanDialogProps {
   onClose: () => void;
@@ -38,6 +39,7 @@ export default function PlanDialog({ onClose, numPlans, selectedPlan: _selectedP
 
   const defaultValues: PlanMetadata = {
     name: getDefaultName(),
+    country: 'US',
     clonedPlanId: selectedPlan !== null ? undefined : planToClone?.id,
     jsonImport: undefined,
   };
@@ -79,7 +81,9 @@ export default function PlanDialog({ onClose, numPlans, selectedPlan: _selectedP
         await clonePlanMutation({ planId: data.clonedPlanId as Id<'plans'> | 'template1' | 'template2', newPlanName: data.name });
       } else {
         posthog.capture('save_plan', { save_mode: 'create' });
-        await createPlanMutation({ newPlanName: data.name });
+        const country = data.country ?? 'US';
+        const filingStatus = getCountryConfig(country).filingStatuses[0]?.id ?? 'single';
+        await createPlanMutation({ newPlanName: data.name, country, filingStatus });
       }
 
       onClose();
@@ -117,6 +121,19 @@ export default function PlanDialog({ onClose, numPlans, selectedPlan: _selectedP
                 />
                 {errors.name && <ErrorMessage>{errors.name?.message}</ErrorMessage>}
               </Field>
+              {!selectedPlan && !clonedPlanId && (
+                <Field>
+                  <Label htmlFor="country">Country</Label>
+                  <Select {...register('country')} id="country" name="country">
+                    {AVAILABLE_COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Description>Sets the tax system, account types, and currency for this plan.</Description>
+                </Field>
+              )}
               {!selectedPlan && (
                 <>
                   <Field>

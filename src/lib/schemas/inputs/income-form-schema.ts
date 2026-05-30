@@ -1,63 +1,32 @@
 /**
  * Income type schema with tax treatment and withholding rules.
  *
- * Supports wage, socialSecurity, exempt, selfEmployment, and pension income types.
- * Includes withholding validation (required for wages, constrained rates for Social Security)
- * and helper functions for withholding support checks and defaults.
+ * IncomeType is now a plain string — valid values are determined by the active country config.
+ * The Zod schema validates at form-submission time against country-specific income types.
  */
 
 import { z } from 'zod';
 
 import { currencyFieldForbidsZero, optionalPercentageField } from '@/lib/utils/zod-utils';
+import type { CountryConfig } from '@/lib/country/types';
+import { usConfig } from '@/lib/country/configs/us';
 
 import { growthSchema, frequencyTimeframeSchema } from './income-expenses-shared-schemas';
 
-export type IncomeType = 'wage' | 'socialSecurity' | 'exempt' | 'selfEmployment' | 'pension';
+export type IncomeType = string;
 
-export const incomeTaxSchema = z
-  .object({
-    incomeType: z.enum(['wage', 'socialSecurity', 'exempt', 'selfEmployment', 'pension']),
-    withholding: optionalPercentageField(0, 50, 'Withholding'),
-  })
-  .refine(
-    (data) => {
-      if (data.incomeType === 'wage') {
-        return data.withholding !== undefined;
-      }
-      return true;
-    },
-    {
-      message: 'Withholding required for wage income',
-      path: ['withholding'],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.incomeType === 'socialSecurity' && data.withholding !== undefined) {
-        return [0, 7, 10, 12, 22].includes(data.withholding);
-      }
-      return true;
-    },
-    {
-      message: 'Social Security withholding must be 0%, 7%, 10%, 12%, or 22%',
-      path: ['withholding'],
-    }
-  )
-  .refine(
-    (data) => {
-      return !['selfEmployment', 'pension'].includes(data.incomeType);
-    },
-    {
-      message: 'This income type is not yet supported',
-      path: ['incomeType'],
-    }
-  );
+export const incomeTaxSchema = z.object({
+  incomeType: z.string(),
+  withholding: optionalPercentageField(0, 50, 'Withholding'),
+  autoWithholding: z.boolean().optional(),
+});
 
 export const incomeFormSchema = z
   .object({
     id: z.string(),
     name: z.string().min(2, 'Name must be at least 2 characters').max(50, 'Name must be at most 50 characters'),
     amount: currencyFieldForbidsZero('Income cannot be negative or zero'),
+    owner: z.enum(['primary', 'spouse']).default('primary'),
     growth: growthSchema.optional(),
     taxes: incomeTaxSchema,
     disabled: z.boolean().optional(),
@@ -68,7 +37,6 @@ export const incomeFormSchema = z
       if (data.growth?.growthLimit === undefined || data.growth?.growthRate === undefined || data.growth.growthRate <= 0) {
         return true;
       }
-
       return data.growth.growthLimit > data.amount;
     },
     {
@@ -81,7 +49,6 @@ export const incomeFormSchema = z
       if (data.growth?.growthLimit === undefined || data.growth?.growthRate === undefined || data.growth.growthRate >= 0) {
         return true;
       }
-
       return data.growth.growthLimit < data.amount;
     },
     {
@@ -92,27 +59,17 @@ export const incomeFormSchema = z
 
 export type IncomeInputs = z.infer<typeof incomeFormSchema>;
 
-export const supportsWithholding = (incomeType: IncomeType): boolean => {
-  switch (incomeType) {
-    case 'wage':
-    case 'socialSecurity':
-      return true;
-    case 'exempt':
-    case 'selfEmployment':
-    case 'pension':
-      return false;
-  }
-};
+export function supportsWithholding(incomeType: string, config: CountryConfig = usConfig): boolean {
+  return config.incomeTypes.find((t) => t.id === incomeType)?.hasWithholding ?? false;
+}
 
-export const defaultWithholding = (incomeType: IncomeType): number | undefined => {
-  switch (incomeType) {
-    case 'wage':
-      return 20;
-    case 'socialSecurity':
-      return 0;
-    case 'exempt':
-    case 'selfEmployment':
-    case 'pension':
-      return undefined;
-  }
-};
+export function supportsAutoWithholding(incomeType: string, config: CountryConfig = usConfig): boolean {
+  return config.incomeTypes.find((t) => t.id === incomeType)?.supportsAutoWithholding ?? false;
+}
+
+export function defaultWithholding(incomeType: string, config: CountryConfig = usConfig): number | undefined {
+  const typeConfig = config.incomeTypes.find((t) => t.id === incomeType);
+  if (!typeConfig?.hasWithholding) return undefined;
+  // Social Security and equivalents default to 0%; withholding income types default to 20%
+  return typeConfig.isSocialSecurityLike ? 0 : 20;
+}

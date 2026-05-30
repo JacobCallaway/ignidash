@@ -3,6 +3,7 @@
 import { EyeIcon, CheckIcon } from 'lucide-react';
 
 import { cn, formatChartString } from '@/lib/utils';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import type { SingleSimulationTaxesChartDataPoint } from '@/lib/types/chart-data-points';
 import type { TaxesDataView } from '@/lib/types/chart-data-views';
 import type { TaxableIncomeReferenceLineMode, AgiReferenceLineMode } from '@/lib/types/reference-line-modes';
@@ -34,6 +35,9 @@ export default function SingleSimulationTaxesBarChartCard({
   agiReferenceLineMode: currAgiReferenceLineMode,
   agiReferenceLineModes,
 }: SingleSimulationTaxesBarChartCardProps) {
+  const countryConfig = useCountryConfig();
+  const socialSecurityLabel = countryConfig.incomeTypes.find((t) => t.isSocialSecurityLike)?.label ?? 'Social Security';
+
   let title;
   switch (dataView) {
     case 'marginalRates':
@@ -76,10 +80,10 @@ export default function SingleSimulationTaxesBarChartCard({
       title = 'Adjustments & Deductions';
       break;
     case 'socialSecurityIncome':
-      title = 'Social Security Income';
+      title = `${socialSecurityLabel} Income`;
       break;
     case 'socialSecurityTaxablePercentage':
-      title = 'Taxable % of Social Security';
+      title = `Taxable % of ${socialSecurityLabel}`;
       break;
   }
 

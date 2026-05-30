@@ -2,6 +2,7 @@ import type { Doc } from '../_generated/dataModel';
 
 export const basicTemplate: Omit<Doc<'plans'>, '_id' | '_creationTime' | 'userId' | 'name'> = {
   isDefault: false,
+  country: 'US',
   timeline: {
     lifeExpectancy: 82,
     birthMonth: 1,

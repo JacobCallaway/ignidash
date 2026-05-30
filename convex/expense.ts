@@ -42,7 +42,7 @@ export const upsertExpense = mutation({
     const plan = await getPlanForCurrentUserOrThrow(ctx, planId);
 
     const existingIndex = plan.expenses.findIndex((exp) => exp.id === expense.id);
-    if (existingIndex === -1 && plan.expenses.length >= 10) throw new ConvexError('Maximum of 10 expenses reached.');
+    if (existingIndex === -1 && plan.expenses.length >= 20) throw new ConvexError('Maximum of 20 expenses reached.');
 
     const updatedExpenses =
       existingIndex !== -1 ? plan.expenses.map((exp, index) => (index === existingIndex ? expense : exp)) : [...plan.expenses, expense];

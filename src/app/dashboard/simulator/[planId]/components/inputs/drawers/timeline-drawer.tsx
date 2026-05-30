@@ -18,12 +18,13 @@ import { Fieldset, FieldGroup, Field, Label, ErrorMessage, Description } from '@
 import ErrorMessageCard from '@/components/ui/error-message-card';
 import { Combobox, ComboboxLabel, ComboboxOption } from '@/components/catalyst/combobox';
 import { Select } from '@/components/catalyst/select';
+import { Switch, SwitchField, SwitchGroup } from '@/components/catalyst/switch';
 import { Divider } from '@/components/catalyst/divider';
 import { Button } from '@/components/catalyst/button';
 import { DialogActions } from '@/components/catalyst/dialog';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
 
-function getRetirementStrategyDesc(retirementStrategyType: 'fixedAge' | 'swrTarget') {
+function getRetirementStrategyDesc(retirementStrategyType: RetirementStrategyInputs['type']) {
   switch (retirementStrategyType) {
     case 'fixedAge':
       return <>Simulations will always retire at this age.</>;
@@ -41,16 +42,20 @@ function getRetirementStrategyDesc(retirementStrategyType: 'fixedAge' | 'swrTarg
           </a>
         </>
       );
+    case 'earliestPossible':
+      return <>Simulations will retire as soon as your portfolio can cover all remaining annual expenses through life expectancy.</>;
   }
 }
 
-function getRetirementStrategyError(errors: FieldErrors, retirementStrategyType: 'fixedAge' | 'swrTarget') {
+function getRetirementStrategyError(errors: FieldErrors, retirementStrategyType: RetirementStrategyInputs['type']) {
   switch (retirementStrategyType) {
     case 'fixedAge':
       return (errors.retirementStrategy as FieldErrors<Extract<RetirementStrategyInputs, { type: 'fixedAge' }>>)?.retirementAge?.message;
     case 'swrTarget':
       return (errors.retirementStrategy as FieldErrors<Extract<RetirementStrategyInputs, { type: 'swrTarget' }>>)?.safeWithdrawalRate
         ?.message;
+    case 'earliestPossible':
+      return undefined;
   }
 }
 
@@ -61,6 +66,7 @@ interface TimelineDrawerProps {
 
 export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProps) {
   const planId = useSelectedPlanId();
+  const [hasSpouse, setHasSpouse] = useState(() => timeline?.spouseBirthYear !== undefined);
 
   const timelineDefaultValues = useMemo(
     () =>
@@ -117,6 +123,15 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
       unregister('retirementStrategy.retirementAge');
     }
   }, [retirementStrategyType, unregister]);
+
+  const handleSpouseToggle = (checked: boolean) => {
+    setHasSpouse(checked);
+    if (!checked) {
+      unregister('spouseBirthMonth');
+      unregister('spouseBirthYear');
+      unregister('spouseLifeExpectancy');
+    }
+  };
 
   const months = [
     { value: 1, name: 'January' },
@@ -208,6 +223,7 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
                   <Select {...register('retirementStrategy.type')} id="retirementStrategy.type" name="retirementStrategy.type">
                     <option value="fixedAge">Fixed Age</option>
                     <option value="swrTarget">SWR Target</option>
+                    <option value="earliestPossible">Earliest Possible</option>
                   </Select>
                 </Field>
                 {retirementStrategyType === 'fixedAge' && (
@@ -241,7 +257,86 @@ export default function TimelineDrawer({ setOpen, timeline }: TimelineDrawerProp
                     <Description>{getRetirementStrategyDesc(retirementStrategyType)}</Description>
                   </Field>
                 )}
+                {retirementStrategyType === 'earliestPossible' && (
+                  <Field>
+                    <Description>{getRetirementStrategyDesc(retirementStrategyType)}</Description>
+                  </Field>
+                )}
                 <Divider />
+                <SwitchGroup>
+                  <SwitchField>
+                    <Label>Planning as a couple?</Label>
+                    <Description>Add a spouse to enable per-person contribution limits and age-based catch-up tiers.</Description>
+                    <Switch checked={hasSpouse} onChange={handleSpouseToggle} />
+                  </SwitchField>
+                </SwitchGroup>
+                {hasSpouse && (
+                  <>
+                    <div className="grid grid-cols-2 items-end gap-x-4">
+                      <Field>
+                        <Label>Spouse Birth Month</Label>
+                        <Controller
+                          name="spouseBirthMonth"
+                          defaultValue={currentMonth.value}
+                          control={control}
+                          render={({ field: { onChange, value, name } }) => (
+                            <Combobox
+                              name={name}
+                              options={months}
+                              displayValue={(month) => month?.name || currentMonth.name}
+                              value={months.find((m) => m.value === value) || currentMonth}
+                              onChange={(month) => onChange(month?.value || currentMonth.value)}
+                              filter={(month, query) =>
+                                month.name.toLowerCase().includes(query.toLowerCase()) || String(month.value).includes(query)
+                              }
+                            >
+                              {(month) => (
+                                <ComboboxOption value={month}>
+                                  <ComboboxLabel>{month.name}</ComboboxLabel>
+                                </ComboboxOption>
+                              )}
+                            </Combobox>
+                          )}
+                        />
+                      </Field>
+                      <Field>
+                        <Label>Spouse Birth Year</Label>
+                        <Controller
+                          name="spouseBirthYear"
+                          defaultValue={currentYear}
+                          control={control}
+                          render={({ field: { onChange, value, name } }) => (
+                            <Combobox
+                              name={name}
+                              options={years}
+                              displayValue={(year) => String(year || currentYear)}
+                              value={value || currentYear}
+                              onChange={(year) => onChange(year || currentYear)}
+                            >
+                              {(year) => (
+                                <ComboboxOption value={year}>
+                                  <ComboboxLabel>{year}</ComboboxLabel>
+                                </ComboboxOption>
+                              )}
+                            </Combobox>
+                          )}
+                        />
+                        {errors.spouseBirthYear && <ErrorMessage>{errors.spouseBirthYear.message}</ErrorMessage>}
+                      </Field>
+                    </div>
+                    <Field>
+                      <Label htmlFor="spouseLifeExpectancy">Spouse Life Expectancy</Label>
+                      <NumberInput
+                        name="spouseLifeExpectancy"
+                        control={control}
+                        id="spouseLifeExpectancy"
+                        inputMode="numeric"
+                        placeholder="85"
+                      />
+                      {errors.spouseLifeExpectancy && <ErrorMessage>{errors.spouseLifeExpectancy.message}</ErrorMessage>}
+                    </Field>
+                  </>
+                )}
               </FieldGroup>
             </Fieldset>
             <DialogActions>

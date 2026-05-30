@@ -21,6 +21,7 @@ import PageLoading from '@/components/ui/page-loading';
 import { Dialog } from '@/components/catalyst/dialog';
 import { cn } from '@/lib/utils';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
+import { useCountryConfig } from '@/hooks/use-country-config';
 
 import SingleSimulationResults from './results-pages/single-simulation-results';
 import MultiSimulationResults from './results-pages/multi-simulation-results';
@@ -94,6 +95,7 @@ export default function ResultsSections() {
   const { data: accounts } = useAccountsData();
   const timeline = useTimelineData();
   const taxSettings = useTaxSettingsData();
+  const countryConfig = useCountryConfig();
 
   const nwAssets = useAssetData();
 
@@ -182,7 +184,7 @@ export default function ResultsSections() {
         </Drawer>
         <Drawer open={taxSettingsOpen} setOpen={setTaxSettingsOpen} title={taxSettingsTitleComponent}>
           <Suspense fallback={<PageLoading message="Loading Tax Settings" />}>
-            <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} />
+            <TaxSettingsDrawer setOpen={setTaxSettingsOpen} taxSettings={taxSettings} countryConfig={countryConfig} />
           </Suspense>
         </Drawer>
         <Dialog size="xl" open={incomeDialogOpen} onClose={handleIncomeDialogClose}>

@@ -20,7 +20,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { Field as HeadlessField } from '@headlessui/react';
 
-import { useContributionRulesData, useBaseContributionRuleData, useAccountsData } from '@/hooks/use-convex-data';
+import { useContributionRulesData, useBaseContributionRuleData, useAccountsData, useDebtsData } from '@/hooks/use-convex-data';
 import { contributionToConvex, baseContributionToConvex } from '@/lib/utils/data-transformers';
 import DisclosureSection from '@/components/ui/disclosure-section';
 import { Dialog } from '@/components/catalyst/dialog';
@@ -43,8 +43,13 @@ import ContributionRuleDialog from '../dialogs/contribution-rule-dialog';
 import SortableContributionItem from '../sortable-contribution-item';
 import ContributionItem from '../contribution-item';
 
-function getContributionRuleDesc(accounts: Record<string, AccountInputs>, contributionInputs: ContributionInputs) {
-  const accountType = accountTypeForDisplay(accounts[contributionInputs.accountId]?.type);
+function getContributionRuleDesc(
+  accounts: Record<string, AccountInputs>,
+  debts: Record<string, { name: string }>,
+  contributionInputs: ContributionInputs
+) {
+  const isDebtRule = !!contributionInputs.debtId;
+  const targetLabel = isDebtRule ? 'Debt paydown' : accountTypeForDisplay(accounts[contributionInputs.accountId]?.type);
 
   let description: string;
   switch (contributionInputs.contributionType) {
@@ -54,6 +59,9 @@ function getContributionRuleDesc(accounts: Record<string, AccountInputs>, contri
     case 'percentRemaining':
       description = `${contributionInputs.percentRemaining}% remaining`;
       break;
+    case 'percentOfIncome':
+      description = `${contributionInputs.percentOfIncome}% of income`;
+      break;
     case 'unlimited':
       description = 'Unlimited';
       break;
@@ -61,9 +69,20 @@ function getContributionRuleDesc(accounts: Record<string, AccountInputs>, contri
 
   return (
     <p>
-      {description} | {accountType}
+      {description} | {targetLabel}
     </p>
   );
+}
+
+function getRuleName(
+  accounts: Record<string, AccountInputs>,
+  debts: Record<string, { name: string }>,
+  contributionRule: ContributionInputs
+): string {
+  if (contributionRule.debtId) {
+    return `To ${debts[contributionRule.debtId]?.name ?? 'Unknown debt'}`;
+  }
+  return `To ${accounts[contributionRule.accountId]?.name ?? 'Unknown account'}`;
 }
 
 const COLOR_MAP: Record<TaxCategory, string> = {
@@ -88,6 +107,7 @@ export default function ContributionOrderSection(props: ContributionOrderSection
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const { data: accounts, isLoading: isLoadingAccounts } = useAccountsData();
+  const { data: debts } = useDebtsData();
   const { data: contributionRules, isLoading: isLoadingContributionRules } = useContributionRulesData();
   const contributionRulesValues = Object.values(contributionRules);
 
@@ -246,14 +266,18 @@ export default function ContributionOrderSection(props: ContributionOrderSection
                         key={id}
                         id={id}
                         index={index}
-                        name={`To ${accounts[contributionRule.accountId]?.name || 'Unknown'}`}
-                        desc={getContributionRuleDesc(accounts, { id, ...contributionRule })}
+                        name={getRuleName(accounts, debts, { id, ...contributionRule })}
+                        desc={getContributionRuleDesc(accounts, debts, { id, ...contributionRule })}
                         leftAddOn={String(index + 1)}
                         disabled={contributionRule.disabled}
                         onDropdownClickEdit={() => handleDropdownClickEdit({ id, ...contributionRule })}
                         onDropdownClickDelete={() => setContributionRuleToDelete({ id, name: 'Contribution ' + (index + 1) })}
                         onDropdownClickDisable={async () => await disableContributionRule(id)}
-                        colorClassName={COLOR_MAP[taxCategoryFromAccountType(accounts[contributionRule.accountId]?.type)]}
+                        colorClassName={
+                          contributionRule.debtId
+                            ? 'bg-[var(--chart-5)]'
+                            : COLOR_MAP[taxCategoryFromAccountType(accounts[contributionRule.accountId]?.type)]
+                        }
                       />
                     ))}
                   </ul>
@@ -266,14 +290,18 @@ export default function ContributionOrderSection(props: ContributionOrderSection
                       key={activeId}
                       id={activeId}
                       index={activeIndex}
-                      name={`To ${accounts[activeContributionRule.accountId]?.name || 'Unknown'}`}
-                      desc={getContributionRuleDesc(accounts, activeContributionRule)}
+                      name={getRuleName(accounts, debts, activeContributionRule)}
+                      desc={getContributionRuleDesc(accounts, debts, activeContributionRule)}
                       leftAddOn={String(activeIndex + 1)}
                       disabled={activeContributionRule.disabled}
                       onDropdownClickEdit={() => handleDropdownClickEdit(activeContributionRule)}
                       onDropdownClickDelete={() => setContributionRuleToDelete({ id: activeId, name: 'Contribution ' + (activeIndex + 1) })}
                       onDropdownClickDisable={async () => await disableContributionRule(activeId)}
-                      colorClassName={COLOR_MAP[taxCategoryFromAccountType(accounts[activeContributionRule.accountId]?.type)]}
+                      colorClassName={
+                        activeContributionRule.debtId
+                          ? 'bg-[var(--chart-5)]'
+                          : COLOR_MAP[taxCategoryFromAccountType(accounts[activeContributionRule.accountId]?.type)]
+                      }
                     />
                   ) : null}
                 </DragOverlay>
