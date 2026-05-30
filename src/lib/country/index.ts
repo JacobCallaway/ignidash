@@ -1,12 +1,18 @@
 import type { AccountTypeConfig, CountryConfig } from './types';
 import { usConfig } from './configs/us';
 import { ukConfig } from './configs/uk';
+import { caConfig } from './configs/ca';
+import { auConfig } from './configs/au';
+import { nzConfig } from './configs/nz';
 
 export type { CountryConfig } from './types';
 
 const registry: Record<string, CountryConfig> = {
   US: usConfig,
   GB: ukConfig,
+  CA: caConfig,
+  AU: auConfig,
+  NZ: nzConfig,
 };
 
 export const AVAILABLE_COUNTRIES: { code: string; name: string }[] = Object.values(registry).map((c) => ({
