@@ -6,37 +6,44 @@
  * during the portfolio contribution waterfall.
  */
 
-import {
-  type ContributionInputs,
-  sharedLimitAccounts,
-  getAccountTypeLimitKey,
-  getAnnualContributionLimit,
-  getAnnualSection415cLimit,
-  supportsMegaBackdoorRoth,
-} from '@/lib/schemas/inputs/contribution-form-schema';
-import type { AccountInputs } from '@/lib/schemas/inputs/account-form-schema';
+import { type ContributionInputs, buildContributionHelpers } from '@/lib/schemas/inputs/contribution-form-schema';
+import type { CountryConfig } from '@/lib/country/types';
+import { usConfig } from '@/lib/country/configs/us';
 
 import { Account } from './account';
 import type { IncomesData } from './incomes';
 
-/** Aggregates contributions by account type across all rules for shared IRS limit enforcement */
+type ContributionHelpers = ReturnType<typeof buildContributionHelpers>;
+
+/** Aggregates contributions by (owner, account type) across all rules for per-person shared limit enforcement */
 export class ContributionTracker {
-  private employeeByType = new Map<AccountInputs['type'], number>();
-  private employerByType = new Map<AccountInputs['type'], number>();
+  private employeeByOwnerType = new Map<string, number>();
+  private employerByOwnerType = new Map<string, number>();
   private employeeByIncome = new Map<string, number>();
 
-  recordContribution(accountType: AccountInputs['type'], employee: number, employer: number, incomeId: string | undefined): void {
-    this.employeeByType.set(accountType, (this.employeeByType.get(accountType) ?? 0) + employee);
-    this.employerByType.set(accountType, (this.employerByType.get(accountType) ?? 0) + employer);
+  private static ownerTypeKey(owner: 'primary' | 'spouse', accountType: string): string {
+    return `${owner}_${accountType}`;
+  }
+
+  recordContribution(
+    accountType: string,
+    owner: 'primary' | 'spouse',
+    employee: number,
+    employer: number,
+    incomeId: string | undefined
+  ): void {
+    const key = ContributionTracker.ownerTypeKey(owner, accountType);
+    this.employeeByOwnerType.set(key, (this.employeeByOwnerType.get(key) ?? 0) + employee);
+    this.employerByOwnerType.set(key, (this.employerByOwnerType.get(key) ?? 0) + employer);
     if (incomeId) this.employeeByIncome.set(incomeId, (this.employeeByIncome.get(incomeId) ?? 0) + employee);
   }
 
-  getEmployeeByTypes(types: AccountInputs['type'][]): number {
-    return types.reduce((sum, t) => sum + (this.employeeByType.get(t) ?? 0), 0);
+  getEmployeeByTypes(types: string[], owner: 'primary' | 'spouse'): number {
+    return types.reduce((sum, t) => sum + (this.employeeByOwnerType.get(ContributionTracker.ownerTypeKey(owner, t)) ?? 0), 0);
   }
 
-  getEmployerByTypes(types: AccountInputs['type'][]): number {
-    return types.reduce((sum, t) => sum + (this.employerByType.get(t) ?? 0), 0);
+  getEmployerByTypes(types: string[], owner: 'primary' | 'spouse'): number {
+    return types.reduce((sum, t) => sum + (this.employerByOwnerType.get(ContributionTracker.ownerTypeKey(owner, t)) ?? 0), 0);
   }
 
   getEmployeeByIncome(incomeId: string): number {
@@ -44,8 +51,8 @@ export class ContributionTracker {
   }
 
   resetYTD(): void {
-    this.employeeByType.clear();
-    this.employerByType.clear();
+    this.employeeByOwnerType.clear();
+    this.employerByOwnerType.clear();
     this.employeeByIncome.clear();
   }
 
@@ -54,21 +61,73 @@ export class ContributionTracker {
   }
 }
 
+/** A single contribution rule targeting a specific debt with extra payment logic */
+export class DebtContributionRule {
+  private ytdPayment = 0;
+
+  constructor(private contributionInput: ContributionInputs) {}
+
+  getDebtID(): string {
+    return this.contributionInput.debtId!;
+  }
+
+  getRank(): number {
+    return this.contributionInput.rank;
+  }
+
+  calculatePayment(remainingToContribute: number, debtBalance: number): number {
+    const desired = this.calculateDesiredPayment(remainingToContribute);
+    return Math.min(desired, remainingToContribute, debtBalance);
+  }
+
+  recordPayment(amount: number): void {
+    this.ytdPayment += amount;
+  }
+
+  resetYTD(): void {
+    this.ytdPayment = 0;
+  }
+
+  private calculateDesiredPayment(remainingToContribute: number): number {
+    switch (this.contributionInput.contributionType) {
+      case 'dollarAmount':
+        return Math.max(0, this.contributionInput.dollarAmount - this.ytdPayment);
+      case 'percentRemaining':
+        return remainingToContribute * (this.contributionInput.percentRemaining / 100);
+      case 'percentOfIncome':
+        return Infinity; // Debt rules don't use income-based contributions; treat as unlimited
+      case 'unlimited':
+        return Infinity;
+    }
+  }
+}
+
 /** Collection of contribution rules with a base strategy (spend or save surplus) */
 export class ContributionRules {
   private readonly contributionRules: ContributionRule[];
+  private readonly debtContributionRules: DebtContributionRule[];
   private readonly tracker: ContributionTracker;
 
   constructor(
     rules: ContributionInputs[],
-    private baseRule: { type: 'spend' | 'save' }
+    private baseRule: { type: 'spend' | 'save' },
+    countryConfig: CountryConfig = usConfig
   ) {
     this.tracker = new ContributionTracker();
-    this.contributionRules = rules.filter((rule) => !rule.disabled).map((rule) => new ContributionRule(rule, this.tracker));
+    const helpers = buildContributionHelpers(countryConfig);
+    const activeRules = rules.filter((rule) => !rule.disabled);
+    this.contributionRules = activeRules
+      .filter((rule) => rule.accountId && rule.accountId !== '')
+      .map((rule) => new ContributionRule(rule, this.tracker, helpers));
+    this.debtContributionRules = activeRules.filter((rule) => !!rule.debtId).map((rule) => new DebtContributionRule(rule));
   }
 
   getRules(): ContributionRule[] {
     return this.contributionRules;
+  }
+
+  getDebtRules(): DebtContributionRule[] {
+    return this.debtContributionRules;
   }
 
   getBaseRuleType(): 'spend' | 'save' {
@@ -78,6 +137,9 @@ export class ContributionRules {
   resetYTD(): void {
     this.tracker.resetYTD();
     for (const rule of this.contributionRules) {
+      rule.resetYTD();
+    }
+    for (const rule of this.debtContributionRules) {
       rule.resetYTD();
     }
   }
@@ -96,7 +158,8 @@ export class ContributionRule {
 
   constructor(
     private contributionInput: ContributionInputs,
-    private tracker: ContributionTracker
+    private tracker: ContributionTracker,
+    private helpers: ContributionHelpers
   ) {}
 
   /**
@@ -117,26 +180,28 @@ export class ContributionRule {
       ? Math.max(0, this.contributionInput.maxBalance - account.getBalance())
       : Infinity;
 
+    const annualIncome = incomesData ? incomesData.totalIncome * 12 : undefined;
+
     const maxContribution = Math.min(
       remainingToMaxBalance,
       remainingToContribute,
-      this.calculateRemainingAccountTypeLimit(account, age),
+      this.calculateRemainingAccountTypeLimit(account, age, annualIncome),
       this.calculateIncomeLimit(incomesData)
     );
 
-    const desiredContribution = this.calculateDesiredContribution(remainingToContribute);
+    const desiredContribution = this.calculateDesiredContribution(remainingToContribute, incomesData);
 
     const contributionAmount = Math.min(desiredContribution, maxContribution);
-    const employerMatchAmount = this.calculateEmployerMatch(contributionAmount);
+    const employerMatchAmount = this.calculateEmployerMatch(contributionAmount, incomesData);
 
     return { contributionAmount, employerMatchAmount };
   }
 
   /** Records a committed contribution against per-rule YTD counters and the shared tracker */
-  recordContribution(employee: number, employer: number, accountType: AccountInputs['type']): void {
+  recordContribution(employee: number, employer: number, accountType: string, owner: 'primary' | 'spouse'): void {
     this.ytdEmployeeContribution += employee;
     this.ytdEmployerMatch += employer;
-    this.tracker.recordContribution(accountType, employee, employer, this.contributionInput.incomeId);
+    this.tracker.recordContribution(accountType, owner, employee, employer, this.contributionInput.incomeId);
   }
 
   resetYTD(): void {
@@ -152,50 +217,65 @@ export class ContributionRule {
     return this.contributionInput.rank;
   }
 
+  isPercentOfIncomeType(): boolean {
+    return this.contributionInput.contributionType === 'percentOfIncome';
+  }
+
   private calculateIncomeLimit(incomesData: IncomesData | null): number {
     const incomeId = this.contributionInput.incomeId;
     if (!incomeId) return Infinity;
     return Math.max(0, (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) - this.tracker.getEmployeeByIncome(incomeId));
   }
 
-  private calculateEmployerMatch(contributionAmount: number): number {
+  private calculateEmployerMatch(contributionAmount: number, incomesData: IncomesData | null): number {
+    // Percent-of-income match: employer contributes their % of income independently of employee amount
+    if (this.contributionInput.employerMatchPercent !== undefined) {
+      const incomeId = this.contributionInput.incomeId;
+      const monthlyIncome = incomeId ? (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) : (incomesData?.totalIncome ?? 0);
+      const maxAnnualMatch = (this.contributionInput.employerMatchPercent / 100) * monthlyIncome * 12;
+      return Math.max(0, maxAnnualMatch - this.ytdEmployerMatch);
+    }
+
+    // Fixed dollar match: employer matches dollar-for-dollar up to the annual cap
     if (!this.contributionInput.employerMatch) return 0;
-
     const remainingToMaxEmployerMatch = Math.max(0, this.contributionInput.employerMatch - this.ytdEmployerMatch);
-
     return Math.min(contributionAmount, remainingToMaxEmployerMatch);
   }
 
-  private calculateDesiredContribution(remainingToContribute: number): number {
+  private calculateDesiredContribution(remainingToContribute: number, incomesData: IncomesData | null): number {
     switch (this.contributionInput.contributionType) {
       case 'dollarAmount':
         return Math.max(0, this.contributionInput.dollarAmount - this.ytdEmployeeContribution);
       case 'percentRemaining':
         return remainingToContribute * (this.contributionInput.percentRemaining / 100);
+      case 'percentOfIncome': {
+        const incomeId = this.contributionInput.incomeId;
+        const monthlyIncome = incomeId ? (incomesData?.perIncomeData?.[incomeId]?.income ?? 0) : (incomesData?.totalIncome ?? 0);
+        const annualTarget = (this.contributionInput.percentOfIncome / 100) * monthlyIncome * 12;
+        return Math.max(0, annualTarget - this.ytdEmployeeContribution);
+      }
       case 'unlimited':
         return Infinity;
     }
   }
 
-  private calculateRemainingAccountTypeLimit(account: Account, age: number): number {
+  private calculateRemainingAccountTypeLimit(account: Account, age: number, annualIncome?: number): number {
     const accountType = account.getAccountType();
+    const owner = account.getOwner();
+    const sharedGroup = this.helpers.getSharedLimitAccounts(accountType);
+    if (!sharedGroup.length) return Infinity;
 
-    const accountTypeGroup = sharedLimitAccounts[accountType];
-    if (!accountTypeGroup) return Infinity;
-
-    if (this.contributionInput.enableMegaBackdoorRoth && supportsMegaBackdoorRoth(accountType)) {
-      const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(accountTypeGroup);
-      const employerMatchSoFar = this.tracker.getEmployerByTypes(accountTypeGroup);
-
+    if (this.contributionInput.enableMegaBackdoorRoth && this.helpers.supportsMegaBackdoorRoth(accountType)) {
+      const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(sharedGroup, owner);
+      const employerMatchSoFar = this.tracker.getEmployerByTypes(sharedGroup, owner);
       const totalContributionsSoFar = employeeContributionsSoFar + employerMatchSoFar;
-
-      return Math.max(0, getAnnualSection415cLimit(age) - totalContributionsSoFar);
+      return Math.max(0, this.helpers.getAnnualSection415cLimit(accountType, age) - totalContributionsSoFar);
     }
 
-    const limit = getAnnualContributionLimit(getAccountTypeLimitKey(accountType), age);
+    const limit = this.helpers.getAnnualContributionLimit(accountType, age, annualIncome);
     if (!Number.isFinite(limit)) return Infinity;
 
-    const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(accountTypeGroup);
+    const employeeContributionsSoFar = this.tracker.getEmployeeByTypes(sharedGroup, owner);
     return Math.max(0, limit - employeeContributionsSoFar);
   }
 }

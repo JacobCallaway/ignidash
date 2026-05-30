@@ -2,12 +2,15 @@
  * Income processing for the simulation engine
  *
  * Handles multiple income sources with varying frequencies, time frames,
- * growth rates, and tax treatments (wage, exempt, Social Security).
- * Processes FICA tax (7.65%) and withholding at the income level.
+ * growth rates, and tax treatments. All country-specific rules come from
+ * CountryConfig (payroll tax rates, income type flags).
  */
 
 import type { IncomeInputs, IncomeType } from '@/lib/schemas/inputs/income-form-schema';
 import type { TimePoint } from '@/lib/schemas/inputs/income-expenses-shared-schemas';
+import type { CountryConfig, IncomeTypeConfig, TaxBracket } from '@/lib/country/types';
+import { computePayrollTax } from '@/lib/country';
+import { usConfig } from '@/lib/country/configs/us';
 
 import type { SimulationState } from './simulation-engine';
 
@@ -37,6 +40,11 @@ export class IncomesProcessor {
         acc.totalIncomeAfterPayrollDeductions += curr.incomeAfterPayrollDeductions;
         acc.totalTaxFreeIncome += curr.taxFreeIncome;
         acc.totalSocialSecurityIncome += curr.socialSecurityIncome;
+        if (curr.owner === 'spouse') {
+          acc.spouseTotalIncome += curr.income;
+          acc.spouseTotalSocialSecurityIncome += curr.socialSecurityIncome;
+          acc.spouseTotalTaxFreeIncome += curr.taxFreeIncome;
+        }
         return acc;
       },
       {
@@ -46,6 +54,9 @@ export class IncomesProcessor {
         totalIncomeAfterPayrollDeductions: 0,
         totalTaxFreeIncome: 0,
         totalSocialSecurityIncome: 0,
+        spouseTotalIncome: 0,
+        spouseTotalSocialSecurityIncome: 0,
+        spouseTotalTaxFreeIncome: 0,
       }
     );
     const perIncomeData = Object.fromEntries(processedIncomes.map((income) => [income.id, income]));
@@ -69,6 +80,9 @@ export class IncomesProcessor {
         acc.totalIncomeAfterPayrollDeductions += curr.totalIncomeAfterPayrollDeductions;
         acc.totalTaxFreeIncome += curr.totalTaxFreeIncome;
         acc.totalSocialSecurityIncome += curr.totalSocialSecurityIncome;
+        acc.spouseTotalIncome = (acc.spouseTotalIncome ?? 0) + (curr.spouseTotalIncome ?? 0);
+        acc.spouseTotalSocialSecurityIncome = (acc.spouseTotalSocialSecurityIncome ?? 0) + (curr.spouseTotalSocialSecurityIncome ?? 0);
+        acc.spouseTotalTaxFreeIncome = (acc.spouseTotalTaxFreeIncome ?? 0) + (curr.spouseTotalTaxFreeIncome ?? 0);
 
         for (const [incomeID, incomeData] of Object.entries(curr.perIncomeData)) {
           const existing = acc.perIncomeData[incomeID];
@@ -92,6 +106,9 @@ export class IncomesProcessor {
         totalIncomeAfterPayrollDeductions: 0,
         totalTaxFreeIncome: 0,
         totalSocialSecurityIncome: 0,
+        spouseTotalIncome: 0,
+        spouseTotalSocialSecurityIncome: 0,
+        spouseTotalTaxFreeIncome: 0,
         perIncomeData: {},
       } satisfies IncomesData
     );
@@ -105,6 +122,10 @@ export interface IncomesData {
   totalIncomeAfterPayrollDeductions: number;
   totalTaxFreeIncome: number;
   totalSocialSecurityIncome: number;
+  /** Spouse-attributed totals — undefined/0 when no spouse income exists */
+  spouseTotalIncome?: number;
+  spouseTotalSocialSecurityIncome?: number;
+  spouseTotalTaxFreeIncome?: number;
   perIncomeData: Record<string, IncomeData>;
 }
 
@@ -112,18 +133,57 @@ export interface IncomesData {
 export class Incomes {
   private readonly incomes: Income[];
 
-  constructor(data: IncomeInputs[]) {
-    this.incomes = data.filter((income) => !income.disabled).map((income) => new Income(income));
+  constructor(data: IncomeInputs[], countryConfig: CountryConfig = usConfig) {
+    this.incomes = data.filter((income) => !income.disabled).map((income) => new Income(income, countryConfig));
   }
 
   getActiveIncomesByTimeFrame(simulationState: SimulationState): Income[] {
     return this.incomes.filter((income) => income.getIsActiveByTimeFrame(simulationState));
+  }
+
+  /**
+   * Recomputes automatic withholding rates for the current year.
+   * Called at the start of each simulation year so tax is withheld monthly rather than settled as a lump sum.
+   * Rate is derived from the expected total annual income and the country's income tax brackets.
+   */
+  updateAutoWithholdingRates(simulationState: SimulationState, filingStatus: string, countryConfig: CountryConfig): void {
+    const activeIncomes = this.getActiveIncomesByTimeFrame(simulationState);
+    const autoIncomes = activeIncomes.filter((inc) => inc.isAutoWithholding());
+    if (autoIncomes.length === 0) return;
+
+    const incomeTaxConfig = countryConfig.incomeTax[filingStatus];
+    const brackets: TaxBracket[] = incomeTaxConfig?.brackets ?? [];
+    const standardDeduction = incomeTaxConfig?.standardDeduction ?? 0;
+
+    const computeEffectiveRate = (ownerIncomes: Income[]): number => {
+      const total = ownerIncomes.reduce((sum, inc) => sum + inc.getExpectedAnnualAmount(), 0);
+      if (total === 0) return 0;
+      const hasSpouse = simulationState.spouseAge !== undefined;
+      const perOwnerDeduction = hasSpouse ? standardDeduction / 2 : standardDeduction;
+      const taxableIncome = Math.max(0, total - perOwnerDeduction);
+      let expectedTax = 0;
+      for (const bracket of brackets) {
+        if (taxableIncome <= bracket.min) break;
+        expectedTax += (Math.min(taxableIncome, bracket.max) - bracket.min) * bracket.rate;
+      }
+      return (expectedTax / total) * 100;
+    };
+
+    const primaryIncomes = activeIncomes.filter((inc) => inc.getOwner() === 'primary');
+    const spouseIncomes = activeIncomes.filter((inc) => inc.getOwner() === 'spouse');
+    const primaryRate = computeEffectiveRate(primaryIncomes);
+    const spouseRate = computeEffectiveRate(spouseIncomes);
+
+    for (const income of autoIncomes) {
+      income.setAutoWithholdingRate(income.getOwner() === 'spouse' ? spouseRate : primaryRate);
+    }
   }
 }
 
 export interface IncomeData {
   id: string;
   name: string;
+  owner: 'primary' | 'spouse';
   income: number;
   amountWithheld: number;
   ficaTax: number;
@@ -137,6 +197,7 @@ export class Income {
   private hasOneTimeIncomeOccurred: boolean;
   private id: string;
   private name: string;
+  private owner: 'primary' | 'spouse';
   private amount: number;
   private growthRate: number | undefined;
   private growthLimit: number | undefined;
@@ -146,11 +207,15 @@ export class Income {
   private lastYear: number = 0;
   private incomeType: IncomeType;
   private withholdingRate: number;
+  private autoWithholding: boolean;
+  private incomeTypeConfig: IncomeTypeConfig | undefined;
+  private countryConfig: CountryConfig;
 
-  constructor(data: IncomeInputs) {
+  constructor(data: IncomeInputs, countryConfig: CountryConfig = usConfig) {
     this.hasOneTimeIncomeOccurred = false;
     this.id = data.id;
     this.name = data.name;
+    this.owner = data.owner ?? 'primary';
     this.amount = data.amount;
     this.growthRate = data.growth?.growthRate;
     this.growthLimit = data.growth?.growthLimit;
@@ -159,6 +224,27 @@ export class Income {
     this.frequency = data.frequency;
     this.incomeType = data.taxes.incomeType;
     this.withholdingRate = data.taxes.withholding ?? 0;
+    this.autoWithholding = data.taxes.autoWithholding ?? false;
+    this.countryConfig = countryConfig;
+    this.incomeTypeConfig = countryConfig.incomeTypes.find((t) => t.id === data.taxes.incomeType);
+  }
+
+  getOwner(): 'primary' | 'spouse' {
+    return this.owner;
+  }
+
+  isAutoWithholding(): boolean {
+    return this.autoWithholding && (this.incomeTypeConfig?.supportsAutoWithholding ?? false);
+  }
+
+  setAutoWithholdingRate(ratePercent: number): void {
+    this.withholdingRate = ratePercent;
+  }
+
+  /** Returns this income's expected annual gross amount for the current simulation year, without mutating state. */
+  getExpectedAnnualAmount(): number {
+    const timesToApplyPerYear = this.getTimesToApplyPerYear();
+    return this.amount * timesToApplyPerYear;
   }
 
   /**
@@ -181,9 +267,9 @@ export class Income {
 
         const growthLimit = this.growthLimit;
         if (growthLimit !== undefined && realGrowthRate > 0) {
-          annualAmount = Math.min(annualAmount, growthLimit);
+          annualAmount = Math.min(annualAmount, growthLimit * timesToApplyPerYear);
         } else if (growthLimit !== undefined && realGrowthRate < 0) {
-          annualAmount = Math.max(annualAmount, growthLimit);
+          annualAmount = Math.max(annualAmount, growthLimit * timesToApplyPerYear);
         }
 
         if (timesToApplyPerYear !== 0) this.amount = Math.max(annualAmount / timesToApplyPerYear, 0);
@@ -196,6 +282,7 @@ export class Income {
       return {
         id: this.id,
         name: this.name,
+        owner: this.owner,
         income: 0,
         amountWithheld: 0,
         ficaTax: 0,
@@ -211,20 +298,15 @@ export class Income {
     let ficaTax: number = 0;
     let taxFreeIncome: number = 0;
     let socialSecurityIncome: number = 0;
-    switch (this.incomeType) {
-      case 'wage':
-        amountWithheld = income * (this.withholdingRate / 100);
-        ficaTax = income * 0.0765; // FICA: 6.2% Social Security + 1.45% Medicare
-        break;
-      case 'exempt':
-        taxFreeIncome = income;
-        break;
-      case 'socialSecurity':
-        amountWithheld = income * (this.withholdingRate / 100);
-        socialSecurityIncome = income;
-        break;
-      default:
-        break;
+    const typeConfig = this.incomeTypeConfig;
+    if (typeConfig?.isTaxFree) {
+      taxFreeIncome = income;
+    } else {
+      if (typeConfig?.hasWithholding) amountWithheld = income * (this.withholdingRate / 100);
+      if (typeConfig?.hasPayrollTax && this.countryConfig.payrollTax) {
+        ficaTax = computePayrollTax(income, this.countryConfig.payrollTax);
+      }
+      if (typeConfig?.isSocialSecurityLike) socialSecurityIncome = income;
     }
 
     const incomeAfterPayrollDeductions = income - amountWithheld - ficaTax;
@@ -233,6 +315,7 @@ export class Income {
     return {
       id: this.id,
       name: this.name,
+      owner: this.owner,
       income,
       amountWithheld,
       ficaTax,

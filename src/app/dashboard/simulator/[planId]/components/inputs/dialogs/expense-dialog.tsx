@@ -17,7 +17,7 @@ import { expenseToConvex } from '@/lib/utils/data-transformers';
 import type { DisclosureState } from '@/lib/types/disclosure-state';
 import { expenseFormSchema, type ExpenseInputs } from '@/lib/schemas/inputs/expense-form-schema';
 import { calculateAge } from '@/lib/schemas/inputs/timeline-form-schema';
-import { timeFrameForDisplay, growthForDisplay } from '@/lib/utils/display-formatters';
+import { timeFrameForDisplay, growthForDisplay, frequencyForDisplay } from '@/lib/utils/display-formatters';
 import { DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/catalyst/dialog';
 import NumberInput from '@/components/ui/number-input';
 import { Field, Fieldset, FieldGroup, Label, ErrorMessage } from '@/components/catalyst/fieldset';
@@ -489,7 +489,7 @@ export default function ExpenseDialog({ onClose, selectedExpense: _selectedExpen
                           <span className="text-base/7 font-semibold">Rate of Change</span>
                           <span className="hidden sm:inline">|</span>
                           <span className="text-muted-foreground hidden truncate sm:inline">
-                            {growthForDisplay(growthRate, growthLimit)}
+                            {growthForDisplay(growthRate, growthLimit, frequency)}
                           </span>
                         </div>
                         <span className="text-muted-foreground ml-6 flex h-7 items-center">
@@ -524,7 +524,9 @@ export default function ExpenseDialog({ onClose, selectedExpense: _selectedExpen
                           </Field>
                           <Field>
                             <Label htmlFor="growth.growthLimit" className="flex w-full items-center justify-between">
-                              <span className="whitespace-nowrap">Limit</span>
+                              <span className="whitespace-nowrap">
+                                Limit <span className="text-muted-foreground font-normal">{frequencyForDisplay(frequency)}</span>
+                              </span>
                               <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
                             </Label>
                             <NumberInput
@@ -532,7 +534,7 @@ export default function ExpenseDialog({ onClose, selectedExpense: _selectedExpen
                               control={control}
                               id="growth.growthLimit"
                               inputMode="decimal"
-                              placeholder={formatCurrencyPlaceholder(60000)}
+                              placeholder={formatCurrencyPlaceholder(5000)}
                               prefix={getCurrencySymbol()}
                             />
                             {errors.growth?.growthLimit && <ErrorMessage>{errors.growth?.growthLimit?.message}</ErrorMessage>}

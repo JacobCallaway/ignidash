@@ -41,6 +41,8 @@ export const createConvexAccount = (overrides?: Partial<ConvexAccount> & { type?
     case 'ira':
     case 'hsa':
       return { ...base, type, percentBonds: overrides?.percentBonds ?? 20 };
+    default:
+      return { ...base, type } as ConvexAccount;
   }
 };
 

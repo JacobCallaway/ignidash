@@ -34,7 +34,7 @@ import { Input } from '@/components/catalyst/input';
 import { useSelectedPlanId } from '@/hooks/use-selected-plan-id';
 import { getErrorMessages } from '@/lib/utils/form-utils';
 import { Divider } from '@/components/catalyst/divider';
-import { getCurrencySymbol, formatCurrencyPlaceholder } from '@/lib/utils/number-formatters';
+import { getCurrencySymbol, formatCurrencyPlaceholder, formatCurrency } from '@/lib/utils/number-formatters';
 
 import SyncWithNetWorthTrackerSelect from './sync-with-nw-tracker-select';
 import { PayoffEstimate } from './payoff-estimate';
@@ -99,6 +99,7 @@ export default function PhysicalAssetDialog({
 
   const m = useMutation(api.physical_asset.upsertPhysicalAsset);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [calcTermYears, setCalcTermYears] = useState<string>('');
 
   const onSubmit = async (data: PhysicalAssetInputs) => {
     const processedData = { ...data };
@@ -181,6 +182,16 @@ export default function PhysicalAssetDialog({
         }
       : null
   );
+
+  const calculatedMonthlyPayment = useMemo(() => {
+    const principal = Number(paymentMethod.type === 'loan' ? paymentMethod.loanBalance : 0);
+    const apr = Number(paymentMethod.type === 'loan' ? paymentMethod.apr : 0);
+    const termYears = parseFloat(calcTermYears);
+    if (!principal || !apr || !termYears || termYears <= 0) return null;
+    const r = apr / 100 / 12;
+    const n = termYears * 12;
+    return (principal * (r * Math.pow(1 + r, n))) / (Math.pow(1 + r, n) - 1);
+  }, [paymentMethod, calcTermYears]);
 
   useEffect(() => {
     if (purchaseDateType !== 'customDate') {
@@ -675,6 +686,46 @@ export default function PhysicalAssetDialog({
                               />
                               {aprError && <ErrorMessage>{aprError.message}</ErrorMessage>}
                             </Field>
+                            <div className="col-span-2">
+                              <div className="border-border/25 my-1 flex items-center gap-3 border-t pt-3">
+                                <span className="text-muted-foreground shrink-0 text-xs font-medium tracking-wide uppercase">
+                                  Payment Calculator
+                                </span>
+                                <div className="flex flex-1 items-center gap-2">
+                                  <div className="relative flex items-center">
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      max={50}
+                                      step={1}
+                                      value={calcTermYears}
+                                      onChange={(e) => setCalcTermYears(e.target.value)}
+                                      placeholder="30"
+                                      className="w-20 pr-10 text-right"
+                                      aria-label="Loan term in years"
+                                    />
+                                    <span className="text-muted-foreground pointer-events-none absolute right-2 text-sm">yr</span>
+                                  </div>
+                                  <span className="text-muted-foreground text-sm">→</span>
+                                  <span className="text-sm font-medium tabular-nums">
+                                    {calculatedMonthlyPayment !== null ? `${formatCurrency(calculatedMonthlyPayment)}/mo` : '—'}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    outline
+                                    disabled={calculatedMonthlyPayment === null}
+                                    className="ml-auto"
+                                    onClick={() => {
+                                      if (calculatedMonthlyPayment !== null) {
+                                        setValue('paymentMethod.monthlyPayment', Math.round(calculatedMonthlyPayment * 100) / 100);
+                                      }
+                                    }}
+                                  >
+                                    Apply
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
                             {showDownPaymentField && (
                               <Field>
                                 <Label htmlFor="paymentMethod.downPayment">Down Payment</Label>

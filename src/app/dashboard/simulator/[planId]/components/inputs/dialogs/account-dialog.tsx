@@ -12,7 +12,13 @@ import posthog from 'posthog-js';
 
 import { accountToConvex } from '@/lib/utils/data-transformers';
 import { DialogTitle, DialogBody, DialogActions } from '@/components/catalyst/dialog';
-import { accountFormSchema, type AccountInputs, isRothAccount, type RothAccountType } from '@/lib/schemas/inputs/account-form-schema';
+import {
+  buildAccountFormSchema,
+  type AccountInputs,
+  isRothAccount,
+  taxCategoryFromAccountType,
+  type RothAccountType,
+} from '@/lib/schemas/inputs/account-form-schema';
 import { assetTypeForDisplay, type AssetInputs } from '@/lib/schemas/finances/asset-form-schema';
 import NumberInput from '@/components/ui/number-input';
 import { Fieldset, FieldGroup, Field, Label, ErrorMessage } from '@/components/catalyst/fieldset';
@@ -26,41 +32,56 @@ import { useLinkableFinances } from '@/hooks/use-linkable-finances';
 import { getErrorMessages } from '@/lib/utils/form-utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { getCurrencySymbol, formatCurrencyPlaceholder } from '@/lib/utils/number-formatters';
+import type { CountryConfig } from '@/lib/country/types';
+import { getAccountTypeConfig } from '@/lib/country';
 
+import { useTimelineData } from '@/hooks/use-convex-data';
 import SyncWithNetWorthTrackerSelect from './sync-with-nw-tracker-select';
 
-const LINKABLE_INVESTMENT_TYPES: AssetInputs['type'][] = [
-  'taxableBrokerage',
-  '401k',
-  '403b',
-  'ira',
-  'roth401k',
-  'roth403b',
-  'rothIra',
-  'hsa',
-];
+const TAX_CATEGORY_LABELS: Record<string, string> = {
+  cashSavings: 'Cash Savings Accounts',
+  taxable: 'Taxable Accounts',
+  taxDeferred: 'Tax-Deferred Accounts',
+  taxFree: 'Tax-Free Accounts',
+};
 
 interface AccountDialogProps {
   onClose: () => void;
   selectedAccount: AccountInputs | null;
   accounts: Record<string, AccountInputs>;
   nwAssets: AssetInputs[] | null;
+  countryConfig: CountryConfig;
 }
 
-export default function AccountDialog({ onClose, selectedAccount: _selectedAccount, accounts, nwAssets }: AccountDialogProps) {
+export default function AccountDialog({
+  onClose,
+  selectedAccount: _selectedAccount,
+  accounts,
+  nwAssets,
+  countryConfig,
+}: AccountDialogProps) {
   const planId = useSelectedPlanId();
   const [selectedAccount] = useState(_selectedAccount);
   const numAccounts = Object.keys(accounts).length;
+
+  // Only investment (non-cashSavings) types are shown in this dialog
+  const investmentTypes = useMemo(() => countryConfig.accountTypes.filter((t) => t.taxCategory !== 'cashSavings'), [countryConfig]);
+
+  const firstInvestmentTypeId = investmentTypes[0]?.id ?? '401k';
+
+  const accountFormSchema = useMemo(() => buildAccountFormSchema(countryConfig), [countryConfig]);
+
+  const linkableInvestmentTypes = useMemo(() => investmentTypes.map((t) => t.id) as AssetInputs['type'][], [investmentTypes]);
 
   const newAccountDefaultValues = useMemo(
     () =>
       ({
         name: 'Investment ' + (numAccounts + 1),
         id: '',
-        type: '401k' as AccountInputs['type'],
+        type: firstInvestmentTypeId as AccountInputs['type'],
         percentBonds: 0,
       }) as const satisfies Partial<AccountInputs>,
-    [numAccounts]
+    [numAccounts, firstInvestmentTypeId]
   );
 
   const defaultValues = (selectedAccount || newAccountDefaultValues) as never;
@@ -86,14 +107,13 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
   const onSubmit = async (data: AccountInputs) => {
     const processedData = { ...data };
 
-    if (isRothAccount(data.type)) {
+    if (isRothAccount(data.type, countryConfig)) {
       const rothData = processedData as Extract<AccountInputs, { type: RothAccountType }>;
       rothData.contributionBasis ??= data.balance;
     }
 
-    if (data.type === 'taxableBrokerage') {
-      const taxableData = processedData as Extract<AccountInputs, { type: 'taxableBrokerage' }>;
-      taxableData.costBasis ??= data.balance;
+    if (taxCategoryFromAccountType(data.type, countryConfig) === 'taxable') {
+      (processedData as AccountInputs & { costBasis?: number }).costBasis ??= data.balance;
     }
 
     const accountId = processedData.id === '' ? uuidv4() : processedData.id;
@@ -113,7 +133,7 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
   const isSynced = !!syncedFinanceId;
 
   const alreadySyncedIds = useAlreadySyncedIds(accounts, 'syncedFinanceId', selectedAccount?.id);
-  const linkableAssets = useLinkableFinances(nwAssets, alreadySyncedIds, LINKABLE_INVESTMENT_TYPES);
+  const linkableAssets = useLinkableFinances(nwAssets, alreadySyncedIds, linkableInvestmentTypes);
 
   const handleSyncChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const assetId = e.target.value;
@@ -131,18 +151,21 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
     setValue('name', asset.name);
   };
 
-  useEffect(() => {
-    if (!isRothAccount(type)) {
-      unregister('contributionBasis');
-    }
+  const timeline = useTimelineData();
+  const hasSpouse = timeline?.spouseBirthYear !== undefined;
 
-    if (type !== 'taxableBrokerage') {
-      unregister('costBasis');
-    }
-  }, [type, unregister]);
+  const currentTypeConfig = useMemo(() => getAccountTypeConfig(countryConfig, type), [countryConfig, type]);
+  const showCostBasis = currentTypeConfig?.hasCostBasis ?? false;
+  const showContributionBasis = isRothAccount(type, countryConfig);
+  const showOwner = hasSpouse && (currentTypeConfig?.annualContributionLimits?.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (!showContributionBasis) unregister('contributionBasis');
+    if (!showCostBasis) unregister('costBasis');
+  }, [showContributionBasis, showCostBasis, unregister]);
 
   const getBalanceColSpan = () => {
-    if (type === 'taxableBrokerage' || isRothAccount(type)) return 'col-span-1';
+    if (showCostBasis || showContributionBasis) return 'col-span-1';
     return 'col-span-2';
   };
 
@@ -154,6 +177,18 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
   const { error: costBasisError } = getFieldState('costBasis');
   const { error: contributionBasisError } = getFieldState('contributionBasis');
   const { error: percentBondsError } = getFieldState('percentBonds');
+
+  // Group investment types by tax category for the select optgroups
+  const typesByCategory = useMemo(() => {
+    const groups: Record<string, typeof investmentTypes> = {};
+    for (const t of investmentTypes) {
+      if (!groups[t.taxCategory]) groups[t.taxCategory] = [];
+      groups[t.taxCategory].push(t);
+    }
+    return groups;
+  }, [investmentTypes]);
+
+  const categoryOrder = ['taxable', 'taxDeferred', 'taxFree'] as const;
 
   return (
     <>
@@ -190,26 +225,34 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
                   value={syncedFinanceId}
                   onChange={handleSyncChange}
                 />
-                <Field className="col-span-2">
+                <Field className={showOwner ? 'col-span-1' : 'col-span-2'}>
                   <Label htmlFor="type">Account Type</Label>
                   <Select {...register('type')} id="type" name="type" disabled={isSynced}>
-                    <optgroup label="Taxable Accounts">
-                      <option value="taxableBrokerage">Taxable Brokerage</option>
-                    </optgroup>
-                    <optgroup label="Tax-Deferred Accounts">
-                      <option value="401k">401(k)</option>
-                      <option value="403b">403(b)</option>
-                      <option value="ira">IRA</option>
-                      <option value="hsa">HSA</option>
-                    </optgroup>
-                    <optgroup label="Tax-Free Accounts">
-                      <option value="roth401k">Roth 401(k)</option>
-                      <option value="roth403b">Roth 403(b)</option>
-                      <option value="rothIra">Roth IRA</option>
-                    </optgroup>
+                    {categoryOrder.map((cat) => {
+                      const types = typesByCategory[cat];
+                      if (!types?.length) return null;
+                      return (
+                        <optgroup key={cat} label={TAX_CATEGORY_LABELS[cat]}>
+                          {types.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                   </Select>
                   {errors.type && <ErrorMessage>{errors.type?.message}</ErrorMessage>}
                 </Field>
+                {showOwner && (
+                  <Field>
+                    <Label htmlFor="owner">Owner</Label>
+                    <Select {...register('owner')} id="owner" name="owner">
+                      <option value="primary">You</option>
+                      <option value="spouse">Spouse</option>
+                    </Select>
+                  </Field>
+                )}
                 <Field className={getBalanceColSpan()}>
                   <Label htmlFor="balance">Balance</Label>
                   <NumberInput
@@ -224,7 +267,7 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
                   />
                   {errors.balance && <ErrorMessage>{errors.balance?.message}</ErrorMessage>}
                 </Field>
-                {type === 'taxableBrokerage' && (
+                {showCostBasis && (
                   <Field>
                     <Label htmlFor="costBasis" className="flex w-full items-center justify-between">
                       <span className="whitespace-nowrap">Cost Basis</span>
@@ -249,7 +292,7 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
                     {costBasisError && <ErrorMessage>{costBasisError.message}</ErrorMessage>}
                   </Field>
                 )}
-                {isRothAccount(type) && (
+                {showContributionBasis && (
                   <Field>
                     <Label htmlFor="contributionBasis" className="flex w-full items-center justify-between">
                       <span className="whitespace-nowrap">Contribution Basis</span>
@@ -283,7 +326,7 @@ export default function AccountDialog({ onClose, selectedAccount: _selectedAccou
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>The percentage of this account&apos;s holdings allocated to bonds.</p>
-                        <p>Modeled as US Treasury bonds, which generate taxable interest income.</p>
+                        <p>Modeled as government bonds, which generate taxable interest income.</p>
                       </TooltipContent>
                     </Tooltip>
                   </Label>

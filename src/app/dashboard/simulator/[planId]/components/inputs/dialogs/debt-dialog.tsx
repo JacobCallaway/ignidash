@@ -123,9 +123,12 @@ export default function DebtDialog({ onClose, selectedDebt: _selectedDebt, debts
   const apr = Number(useWatch({ control, name: 'apr' }));
   const interestType = useWatch({ control, name: 'interestType' });
   const compoundingFrequency = useWatch({ control, name: 'compoundingFrequency' });
+  const paymentType = useWatch({ control, name: 'paymentType' });
 
   const payoffMonths = usePayoffEstimate(
-    !isNaN(balance) && !isNaN(monthlyPayment) && !isNaN(apr) ? { balance, monthlyPayment, apr, interestType, compoundingFrequency } : null
+    paymentType === 'fixed' && !isNaN(balance) && !isNaN(monthlyPayment) && !isNaN(apr)
+      ? { balance, monthlyPayment, apr, interestType, compoundingFrequency }
+      : null
   );
 
   const startTimePoint = useWatch({ control, name: 'startDate' });
@@ -144,7 +147,11 @@ export default function DebtDialog({ onClose, selectedDebt: _selectedDebt, debts
     if (startType !== 'customAge') {
       unregister('startDate.age');
     }
-  }, [interestType, startType, unregister]);
+
+    if (paymentType !== 'fixed') {
+      unregister('monthlyPayment');
+    }
+  }, [interestType, startType, paymentType, unregister]);
 
   const getStartColSpan = () => {
     if (startType === 'customDate') return 'col-span-2';
@@ -259,17 +266,26 @@ export default function DebtDialog({ onClose, selectedDebt: _selectedDebt, debts
                   {errors.balance && <ErrorMessage>{errors.balance?.message}</ErrorMessage>}
                 </Field>
                 <Field>
-                  <Label htmlFor="monthlyPayment">Monthly Payment</Label>
-                  <NumberInput
-                    name="monthlyPayment"
-                    control={control}
-                    id="monthlyPayment"
-                    inputMode="decimal"
-                    placeholder={formatCurrencyPlaceholder(500)}
-                    prefix={getCurrencySymbol()}
-                  />
-                  {errors.monthlyPayment && <ErrorMessage>{errors.monthlyPayment?.message}</ErrorMessage>}
+                  <Label htmlFor="paymentType">Monthly Payment</Label>
+                  <Select {...register('paymentType')} id="paymentType" name="paymentType">
+                    <option value="fixed">Fixed Amount</option>
+                    <option value="minimumPayment">Minimum Only</option>
+                  </Select>
                 </Field>
+                {paymentType === 'fixed' && (
+                  <Field>
+                    <Label htmlFor="monthlyPayment">&nbsp;</Label>
+                    <NumberInput
+                      name="monthlyPayment"
+                      control={control}
+                      id="monthlyPayment"
+                      inputMode="decimal"
+                      placeholder={formatCurrencyPlaceholder(500)}
+                      prefix={getCurrencySymbol()}
+                    />
+                    {errors.monthlyPayment && <ErrorMessage>{errors.monthlyPayment?.message}</ErrorMessage>}
+                  </Field>
+                )}
                 <Field className="col-span-2">
                   <Label htmlFor="apr">APR</Label>
                   <NumberInput name="apr" control={control} id="apr" inputMode="decimal" placeholder="24%" suffix="%" />

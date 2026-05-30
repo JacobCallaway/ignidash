@@ -5,6 +5,7 @@ import { BarChart, ReferenceLine, ResponsiveContainer } from 'recharts';
 import { formatCompactCurrency } from '@/lib/utils/number-formatters';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useChartTheme } from '@/hooks/use-chart-theme';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import type { SingleSimulationCashFlowChartDataPoint } from '@/lib/types/chart-data-points';
 import type { CashFlowDataView } from '@/lib/types/chart-data-views';
 import type { IncomeData } from '@/lib/calc/incomes';
@@ -34,17 +35,22 @@ export default function SingleSimulationCashFlowBarChart({
 }: SingleSimulationCashFlowBarChartProps) {
   const { foregroundColor, foregroundMutedColor } = useChartTheme();
   const isSmallScreen = useIsMobile();
+  const countryConfig = useCountryConfig();
+
+  const socialSecurityLabel = countryConfig.incomeTypes.find((t) => t.isSocialSecurityLike)?.label ?? 'Social Security';
+  const incomeTaxLabel = countryConfig.incomeTaxLabel;
+  const payrollTaxLabel = countryConfig.payrollTax?.label ?? 'Payroll Tax';
 
   const labelConfig: Record<string, { mobile: string[]; desktop: string[] }> = {
     surplusDeficit: {
-      mobile: ['Earned', 'Soc. Sec.', 'Tax-Free', 'Expenses', 'Taxes', 'Debt'],
-      desktop: ['Earned Income', 'Social Security', 'Tax-Free Income', 'Expenses', 'Taxes & Penalties', 'Debt Payments'],
+      mobile: ['Earned', socialSecurityLabel, 'Tax-Free', 'Expenses', 'Taxes', 'Debt'],
+      desktop: ['Earned Income', socialSecurityLabel, 'Tax-Free Income', 'Expenses', 'Taxes & Penalties', 'Debt Payments'],
     },
     cashFlow: {
-      mobile: ['Earned', 'Soc. Sec.', 'Tax-Free', 'Liquidated', 'Proceeds', 'Expenses', 'Taxes', 'Debt', 'Invested', 'Outlay'],
+      mobile: ['Earned', socialSecurityLabel, 'Tax-Free', 'Liquidated', 'Proceeds', 'Expenses', 'Taxes', 'Debt', 'Invested', 'Outlay'],
       desktop: [
         'Earned Income',
-        'Social Security',
+        socialSecurityLabel,
         'Tax-Free Income',
         'Amount Liquidated',
         'Asset Sale Proceeds',
@@ -60,8 +66,8 @@ export default function SingleSimulationCashFlowBarChart({
       desktop: ['Employer Match'],
     },
     expenses: {
-      mobile: ['Fed. Income Tax', 'FICA Tax', 'Cap Gains Tax', 'NIIT', 'EW Penalty'],
-      desktop: ['Fed. Income Tax', 'FICA Tax', 'Cap Gains Tax', 'NIIT', 'EW Penalties'],
+      mobile: [incomeTaxLabel, `${payrollTaxLabel} Tax`, 'Cap Gains Tax', 'NIIT', 'EW Penalty'],
+      desktop: [incomeTaxLabel, `${payrollTaxLabel} Tax`, 'Cap Gains Tax', 'NIIT', 'EW Penalties'],
     },
   };
 

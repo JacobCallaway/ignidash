@@ -268,29 +268,37 @@ describe('InvestmentAccount allocation tracking', () => {
 
 describe('RMD eligibility', () => {
   it('should have RMDs for 401k', () => {
-    const account = new TaxDeferredAccount(create401kAccount());
+    const account = new TaxDeferredAccount(create401kAccount(), true);
     expect(account.getHasRMDs()).toBe(true);
   });
 
   it('should have RMDs for traditional IRA', () => {
-    const account = new TaxDeferredAccount({
-      type: 'ira',
-      id: 'ira-1',
-      name: 'IRA',
-      balance: 50000,
-      percentBonds: 20,
-    });
+    const account = new TaxDeferredAccount(
+      {
+        type: 'ira',
+        id: 'ira-1',
+        name: 'IRA',
+        balance: 50000,
+        owner: 'primary',
+        percentBonds: 20,
+      },
+      true
+    );
     expect(account.getHasRMDs()).toBe(true);
   });
 
   it('should have RMDs for 403b', () => {
-    const account = new TaxDeferredAccount({
-      type: '403b',
-      id: '403b-1',
-      name: '403b',
-      balance: 50000,
-      percentBonds: 20,
-    });
+    const account = new TaxDeferredAccount(
+      {
+        type: '403b',
+        id: '403b-1',
+        name: '403b',
+        balance: 50000,
+        owner: 'primary',
+        percentBonds: 20,
+      },
+      true
+    );
     expect(account.getHasRMDs()).toBe(true);
   });
 
@@ -305,6 +313,7 @@ describe('RMD eligibility', () => {
       id: 'roth401k-1',
       name: 'Roth 401k',
       balance: 50000,
+      owner: 'primary',
       percentBonds: 20,
       contributionBasis: 40000,
     });
@@ -353,6 +362,7 @@ describe('tax categories', () => {
       id: 'ira-1',
       name: 'IRA',
       balance: 50000,
+      owner: 'primary',
       percentBonds: 20,
     });
     expect(account.taxCategory).toBe('taxDeferred');
@@ -374,6 +384,7 @@ describe('tax categories', () => {
       id: 'roth401k-1',
       name: 'Roth 401k',
       balance: 50000,
+      owner: 'primary',
       percentBonds: 20,
       contributionBasis: 40000,
     });

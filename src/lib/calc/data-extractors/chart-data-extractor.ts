@@ -218,7 +218,7 @@ export abstract class ChartDataExtractor {
         annualFicaTax,
         cumulativeFicaTax,
         taxDeferredWithdrawals: taxesData.incomeSources.taxDeferredWithdrawals,
-        earlyRothEarningsWithdrawals: taxesData.incomeSources.earlyWithdrawals.rothEarnings,
+        earlyRothEarningsWithdrawals: taxesData.incomeSources.earlyWithdrawals['rothEarnings'] ?? 0,
         taxableRetirementDistributions: taxesData.incomeSources.taxableRetirementDistributions,
         taxableInterestIncome: taxesData.incomeSources.taxableInterestIncome,
         taxableIncomeTaxedAsOrdinary: taxesData.federalIncomeTaxes.taxableIncomeTaxedAsOrdinary,

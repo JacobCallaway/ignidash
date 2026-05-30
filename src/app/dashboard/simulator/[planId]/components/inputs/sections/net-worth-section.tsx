@@ -7,6 +7,7 @@ import { LandmarkIcon, PiggyBankIcon, TrendingUpIcon, RouteIcon, HomeIcon } from
 import { PlusIcon } from '@heroicons/react/16/solid';
 
 import { useAccountsData, useAssetData, useLiabilityData, useGlidePathData, usePhysicalAssetsData } from '@/hooks/use-convex-data';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import DisclosureSection from '@/components/ui/disclosure-section';
 import { Dialog } from '@/components/catalyst/dialog';
 import { Button } from '@/components/catalyst/button';
@@ -91,6 +92,7 @@ interface NetWorthSectionProps {
 
 export default function NetWorthSection(props: NetWorthSectionProps) {
   const planId = useSelectedPlanId();
+  const countryConfig = useCountryConfig();
 
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<AccountInputs | null>(null);
@@ -251,7 +253,13 @@ export default function NetWorthSection(props: NetWorthSectionProps) {
         </div>
       </DisclosureSection>
       <Dialog size="xl" open={accountDialogOpen} onClose={handleAccountDialogClose}>
-        <AccountDialog selectedAccount={selectedAccount} accounts={accounts} nwAssets={nwAssets} onClose={handleAccountDialogClose} />
+        <AccountDialog
+          selectedAccount={selectedAccount}
+          accounts={accounts}
+          nwAssets={nwAssets}
+          countryConfig={countryConfig}
+          onClose={handleAccountDialogClose}
+        />
       </Dialog>
       <Dialog size="xl" open={savingsDialogOpen} onClose={handleSavingsDialogClose}>
         <SavingsDialog selectedAccount={selectedSavings} accounts={accounts} nwAssets={nwAssets} onClose={handleSavingsDialogClose} />

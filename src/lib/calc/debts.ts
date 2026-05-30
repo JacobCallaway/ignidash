@@ -165,6 +165,10 @@ export class Debts {
     return this.debts.filter((debt) => debt.getIsActive(simulationState));
   }
 
+  getDebtById(id: string): Debt | undefined {
+    return this.debts.find((debt) => debt.getId() === id);
+  }
+
   getTotalBalance(): number {
     return this.debts.reduce((sum, debt) => sum + debt.getBalance(), 0);
   }
@@ -180,7 +184,8 @@ export class Debt {
   private interestType: 'simple' | 'compound';
   private compoundingFrequency: CompoundingFrequency | undefined;
   private startDate: TimePoint;
-  private monthlyPayment: number; // Mutable, deflates over time
+  private paymentType: 'fixed' | 'minimumPayment';
+  private monthlyPayment: number; // Mutable for fixed type, deflates over time
   private hasBeenIncurred: boolean;
 
   constructor(data: DebtInputs) {
@@ -192,7 +197,8 @@ export class Debt {
     this.interestType = data.interestType;
     this.compoundingFrequency = data.compoundingFrequency;
     this.startDate = data.startDate;
-    this.monthlyPayment = data.monthlyPayment;
+    this.paymentType = data.paymentType ?? 'fixed';
+    this.monthlyPayment = data.monthlyPayment ?? 0;
     this.hasBeenIncurred = data.startDate.type === 'now';
   }
 
@@ -205,7 +211,20 @@ export class Debt {
   /** Deflates the nominal payment to reflect real purchasing power loss.
    *  Must only be called on incurred debts, after payment processing. */
   applyMonthlyInflation(monthlyInflationRate: number): void {
-    this.monthlyPayment /= 1 + monthlyInflationRate;
+    if (this.paymentType === 'fixed') {
+      this.monthlyPayment /= 1 + monthlyInflationRate;
+    }
+  }
+
+  /**
+   * Applies an extra payment directly to the debt (above the minimum payment).
+   * Capped at the remaining balance. Returns the amount actually paid.
+   */
+  applyExtraPayment(amount: number): number {
+    if (this.isPaidOff() || !this.hasBeenIncurred) return 0;
+    const actual = Math.min(amount, this.balance);
+    this.applyPayment(actual, 0);
+    return actual;
   }
 
   getId(): string {
@@ -225,17 +244,24 @@ export class Debt {
   }
 
   /**
-   * Calculates monthly payment and interest, capped at remaining balance
+   * Calculates monthly payment and interest, capped at remaining balance.
+   * For minimumPayment type: pays only the interest (prevents balance growth).
    * @param monthlyInflationRate - Monthly inflation for real interest calculation
    * @returns Payment due and interest component
    */
   getMonthlyPaymentInfo(monthlyInflationRate: number): { monthlyPaymentDue: number; interest: number } {
     if (this.isPaidOff()) return { monthlyPaymentDue: 0, interest: 0 };
 
-    // Interest can be negative when inflation > APR (real rate is negative)
     const interest = this.calculateMonthlyInterest(monthlyInflationRate);
-    const monthlyPaymentDue = Math.min(this.monthlyPayment, this.balance + interest);
 
+    if (this.paymentType === 'minimumPayment') {
+      // Pay only the interest accrued — prevents balance from growing
+      const monthlyPaymentDue = Math.max(0, Math.min(interest, this.balance + interest));
+      return { monthlyPaymentDue, interest };
+    }
+
+    // Fixed payment capped at balance + interest (can't overpay)
+    const monthlyPaymentDue = Math.min(this.monthlyPayment, this.balance + interest);
     return { monthlyPaymentDue, interest };
   }
 

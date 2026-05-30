@@ -13,17 +13,19 @@ import { useForm, useWatch, Controller } from 'react-hook-form';
 import posthog from 'posthog-js';
 
 import { useTimelineData } from '@/hooks/use-convex-data';
+import { useCountryConfig } from '@/hooks/use-country-config';
 import { incomeToConvex } from '@/lib/utils/data-transformers';
 import type { DisclosureState } from '@/lib/types/disclosure-state';
 import {
   incomeFormSchema,
   type IncomeInputs,
   supportsWithholding,
+  supportsAutoWithholding,
   type IncomeType,
   defaultWithholding as getDefaultWithholding,
 } from '@/lib/schemas/inputs/income-form-schema';
 import { calculateAge } from '@/lib/schemas/inputs/timeline-form-schema';
-import { timeFrameForDisplay, growthForDisplay, incomeTaxTreatmentForDisplay } from '@/lib/utils/display-formatters';
+import { timeFrameForDisplay, growthForDisplay, incomeTaxTreatmentForDisplay, frequencyForDisplay } from '@/lib/utils/display-formatters';
 import { DialogTitle, DialogDescription, DialogBody, DialogActions } from '@/components/catalyst/dialog';
 import NumberInput from '@/components/ui/number-input';
 import { Field, Fieldset, FieldGroup, Label, ErrorMessage } from '@/components/catalyst/fieldset';
@@ -47,19 +49,24 @@ interface IncomeDialogProps {
 export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome, numIncomes }: IncomeDialogProps) {
   const planId = useSelectedPlanId();
   const [selectedIncome] = useState(_selectedIncome);
+  const countryConfig = useCountryConfig();
 
-  const newIncomeDefaultValues = useMemo(
-    () =>
-      ({
-        name: 'Income ' + (numIncomes + 1),
-        id: '',
-        frequency: 'yearly',
-        timeframe: { start: { type: 'now' }, end: { type: 'atRetirement' } },
-        growth: { growthRate: 0 },
-        taxes: { incomeType: 'wage', withholding: getDefaultWithholding('wage') },
-      }) as const satisfies Partial<IncomeInputs>,
-    [numIncomes]
-  );
+  const newIncomeDefaultValues = useMemo(() => {
+    const defaultType = countryConfig.incomeTypes[0]?.id ?? 'wage';
+    const isAuto = supportsAutoWithholding(defaultType, countryConfig);
+    return {
+      name: 'Income ' + (numIncomes + 1),
+      id: '',
+      frequency: 'yearly' as const,
+      timeframe: { start: { type: 'now' as const }, end: { type: 'atRetirement' as const } },
+      growth: { growthRate: 0 },
+      taxes: {
+        incomeType: defaultType,
+        withholding: isAuto ? undefined : getDefaultWithholding(defaultType, countryConfig),
+        autoWithholding: isAuto ? true : undefined,
+      },
+    } satisfies Partial<IncomeInputs>;
+  }, [numIncomes, countryConfig]);
 
   const defaultValues = selectedIncome || newIncomeDefaultValues;
 
@@ -107,6 +114,8 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
   const taxes = useWatch({ control, name: 'taxes' });
   const incomeType = taxes.incomeType;
   const withholding = taxes.withholding !== undefined ? Number(taxes.withholding) : undefined;
+  const isAutoMode = taxes.autoWithholding === true;
+  const incomeTypeSupportsAuto = supportsAutoWithholding(incomeType, countryConfig);
 
   useEffect(() => {
     if (frequency === 'oneTime') {
@@ -139,26 +148,34 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
       unregister('timeframe.end.age');
     }
 
-    if (!supportsWithholding(incomeType)) {
+    if (!supportsWithholding(incomeType, countryConfig) || isAutoMode) {
       unregister('taxes.withholding', { keepDefaultValue: true });
     }
-  }, [frequency, startType, endType, unregister, incomeType]);
+
+    if (!incomeTypeSupportsAuto) {
+      unregister('taxes.autoWithholding', { keepDefaultValue: true });
+    }
+  }, [frequency, startType, endType, unregister, incomeType, isAutoMode, incomeTypeSupportsAuto, countryConfig]);
 
   const prevIncomeTypeRef = useRef<IncomeType>(incomeType);
   useEffect(() => {
     if (prevIncomeTypeRef.current !== incomeType) {
+      const isAuto = supportsAutoWithholding(incomeType, countryConfig);
       if (selectedIncome?.taxes.incomeType === incomeType) {
+        setValue('taxes.autoWithholding', selectedIncome.taxes.autoWithholding, { shouldValidate: true });
         setValue('taxes.withholding', selectedIncome.taxes.withholding, { shouldValidate: true });
+      } else if (isAuto) {
+        setValue('taxes.autoWithholding', true, { shouldValidate: true });
+        unregister('taxes.withholding', { keepDefaultValue: true });
       } else {
-        const defaultWithholding = getDefaultWithholding(incomeType);
-        if (defaultWithholding !== undefined) {
-          setValue('taxes.withholding', defaultWithholding, { shouldValidate: true });
-        }
+        setValue('taxes.autoWithholding', undefined, { shouldValidate: true });
+        const defaultW = getDefaultWithholding(incomeType, countryConfig);
+        if (defaultW !== undefined) setValue('taxes.withholding', defaultW, { shouldValidate: true });
       }
 
       prevIncomeTypeRef.current = incomeType;
     }
-  }, [incomeType, setValue, selectedIncome]);
+  }, [incomeType, setValue, unregister, selectedIncome, countryConfig]);
 
   const getStartColSpan = () => {
     if (startType === 'customDate') return 'col-span-2';
@@ -173,7 +190,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
   };
 
   const getIncomeTypeColSpan = () => {
-    if (supportsWithholding(incomeType)) return 'col-span-1';
+    if (supportsWithholding(incomeType, countryConfig)) return 'col-span-1';
     return 'col-span-1 sm:col-span-2';
   };
 
@@ -197,6 +214,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
   const years = Array.from({ length: 2100 - currentYear + 1 }, (_, i) => currentYear + i);
 
   const timeline = useTimelineData();
+  const hasSpouse = timeline?.spouseBirthYear !== undefined;
   const currentAge = timeline ? calculateAge(timeline.birthMonth, timeline.birthYear) : 18;
   const lifeExpectancy = timeline?.lifeExpectancy ?? 110;
 
@@ -291,6 +309,15 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                   </Select>
                   {errors.frequency && <ErrorMessage>{errors.frequency?.message}</ErrorMessage>}
                 </Field>
+                {hasSpouse && (
+                  <Field className="col-span-2 sm:col-span-1">
+                    <Label htmlFor="owner">Owner</Label>
+                    <Select {...register('owner')} id="owner" name="owner">
+                      <option value="primary">You</option>
+                      <option value="spouse">Spouse</option>
+                    </Select>
+                  </Field>
+                )}
               </div>
               <Disclosure as="div" className="border-border/25 border-t pt-4">
                 {({ open, close }) => (
@@ -530,7 +557,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                           <span className="text-base/7 font-semibold">Rate of Change</span>
                           <span className="hidden sm:inline">|</span>
                           <span className="text-muted-foreground hidden truncate sm:inline">
-                            {growthForDisplay(growthRate, growthLimit)}
+                            {growthForDisplay(growthRate, growthLimit, frequency)}
                           </span>
                         </div>
                         <span className="text-muted-foreground ml-6 flex h-7 items-center">
@@ -565,7 +592,9 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                           </Field>
                           <Field>
                             <Label htmlFor="growth.growthLimit" className="flex w-full items-center justify-between">
-                              <span className="whitespace-nowrap">Limit</span>
+                              <span className="whitespace-nowrap">
+                                Limit <span className="text-muted-foreground font-normal">{frequencyForDisplay(frequency)}</span>
+                              </span>
                               <span className="text-muted-foreground hidden truncate text-sm/6 sm:inline">Optional</span>
                             </Label>
                             <NumberInput
@@ -573,7 +602,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                               control={control}
                               id="growth.growthLimit"
                               inputMode="decimal"
-                              placeholder={formatCurrencyPlaceholder(120000)}
+                              placeholder={formatCurrencyPlaceholder(10000)}
                               prefix={getCurrencySymbol()}
                             />
                             {errors.growth?.growthLimit && <ErrorMessage>{errors.growth?.growthLimit?.message}</ErrorMessage>}
@@ -606,7 +635,7 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                         <span className="text-base/7 font-semibold">Taxes</span>
                         <span className="hidden sm:inline">|</span>
                         <span className="text-muted-foreground hidden truncate sm:inline">
-                          {incomeTaxTreatmentForDisplay(incomeType, withholding)}
+                          {incomeTaxTreatmentForDisplay(incomeType, withholding, isAutoMode, countryConfig)}
                         </span>
                       </div>
                       <span className="text-muted-foreground ml-6 flex h-7 items-center">
@@ -619,20 +648,67 @@ export default function IncomeDialog({ onClose, selectedIncome: _selectedIncome,
                         <Field className={getIncomeTypeColSpan()}>
                           <Label htmlFor="taxes.incomeType">Income Type</Label>
                           <Select {...register('taxes.incomeType')} id="taxes.incomeType" name="taxes.incomeType">
-                            <option value="wage">Wages & Salary (W-2)</option>
-                            <option value="socialSecurity">Social Security</option>
-                            <option value="exempt">Tax-Free (gifts, inheritances, etc.)</option>
-                            <option value="selfEmployment" disabled>
-                              Self-Employment (1099) (coming soon!)
-                            </option>
-                            <option value="pension" disabled>
-                              Pension (coming soon!)
-                            </option>
+                            {countryConfig.incomeTypes.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.label}
+                              </option>
+                            ))}
                           </Select>
                           {errors.taxes?.incomeType && <ErrorMessage>{errors.taxes?.incomeType?.message}</ErrorMessage>}
                         </Field>
-                        {supportsWithholding(incomeType) && (
+                        {incomeTypeSupportsAuto && (
                           <Field>
+                            <Label htmlFor="taxes.autoWithholding" className="flex w-full items-center justify-between">
+                              <span>Withholding</span>
+                              <Tooltip>
+                                <TooltipTrigger className="text-muted-foreground">
+                                  <InfoIcon className="size-4 fill-white dark:fill-stone-950" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>
+                                    <strong>Automatic:</strong> your effective income tax rate is calculated from the tax brackets at the
+                                    start of each year and applied as monthly withholding. The rate updates annually as your income changes,
+                                    so there is little or no tax bill at year-end.
+                                  </p>
+                                  <p className="mt-1">
+                                    <strong>Manual:</strong> a fixed percentage you choose is withheld each pay period. Any over- or
+                                    under-withholding is settled at year-end.
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </Label>
+                            <Controller
+                              control={control}
+                              name="taxes.autoWithholding"
+                              render={({ field }) => (
+                                <Select
+                                  id="taxes.autoWithholding"
+                                  value={field.value ? 'auto' : 'manual'}
+                                  onChange={(e) => field.onChange(e.target.value === 'auto')}
+                                >
+                                  <option value="auto">Automatic</option>
+                                  <option value="manual">Manual %</option>
+                                </Select>
+                              )}
+                            />
+                          </Field>
+                        )}
+                        {supportsWithholding(incomeType, countryConfig) && !incomeTypeSupportsAuto && (
+                          <Field>
+                            <Label htmlFor="taxes.withholding">% Withholding</Label>
+                            <NumberInput
+                              name="taxes.withholding"
+                              control={control}
+                              id="taxes.withholding"
+                              inputMode="decimal"
+                              placeholder="20%"
+                              suffix="%"
+                            />
+                            {errors.taxes?.withholding && <ErrorMessage>{errors.taxes?.withholding?.message}</ErrorMessage>}
+                          </Field>
+                        )}
+                        {incomeTypeSupportsAuto && !isAutoMode && (
+                          <Field className="col-span-full">
                             <Label htmlFor="taxes.withholding">% Withholding</Label>
                             <NumberInput
                               name="taxes.withholding"

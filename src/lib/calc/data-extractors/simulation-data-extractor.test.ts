@@ -373,6 +373,69 @@ describe('SimulationDataExtractor.getMilestonesData', () => {
     expect(milestones.yearsToRetirement).toBe(1);
     expect(milestones.retirementAge).toBe(31);
   });
+
+  it('does not flag bankruptcy when starting portfolio is $0', () => {
+    const data: SimulationDataPoint[] = [
+      createMilestoneDataPoint(30, 'accumulation', 0), // Starting year — must not trigger bankruptcy
+      createMilestoneDataPoint(31, 'accumulation', 10000),
+      createMilestoneDataPoint(32, 'accumulation', 20000),
+    ];
+
+    const milestones = SimulationDataExtractor.getMilestonesData(data, 30);
+
+    expect(milestones.bankruptcyAge).toBeNull();
+    expect(milestones.yearsToBankruptcy).toBeNull();
+  });
+
+  it('does not flag bankruptcy when starting portfolio is exactly at the 0.10 boundary', () => {
+    const data: SimulationDataPoint[] = [
+      createMilestoneDataPoint(30, 'accumulation', 0.1), // Boundary value at start — must not trigger
+      createMilestoneDataPoint(31, 'accumulation', 50000),
+    ];
+
+    const milestones = SimulationDataExtractor.getMilestonesData(data, 30);
+
+    expect(milestones.bankruptcyAge).toBeNull();
+  });
+
+  it('correctly flags bankruptcy at year 1 even when year 0 was $0', () => {
+    // Ensure the guard only suppresses the starting year, not subsequent years
+    const data: SimulationDataPoint[] = [
+      createMilestoneDataPoint(30, 'accumulation', 0), // Year 0 — suppressed
+      createMilestoneDataPoint(31, 'accumulation', 0), // Year 1 — should be flagged
+      createMilestoneDataPoint(32, 'accumulation', 0),
+    ];
+
+    const milestones = SimulationDataExtractor.getMilestonesData(data, 30);
+
+    expect(milestones.bankruptcyAge).toBe(31);
+    expect(milestones.yearsToBankruptcy).toBe(1);
+  });
+
+  it('does not flag bankruptcy when starting portfolio is 0 with non-integer start age', () => {
+    // Guard uses Math.floor on both sides, so fractional ages in the same year are covered
+    const data: SimulationDataPoint[] = [
+      createMilestoneDataPoint(30.5, 'accumulation', 0), // Floor(30.5) = 30 — suppressed
+      createMilestoneDataPoint(31.5, 'accumulation', 50000),
+    ];
+
+    const milestones = SimulationDataExtractor.getMilestonesData(data, 30.5);
+
+    expect(milestones.bankruptcyAge).toBeNull();
+  });
+
+  it('flags bankruptcy at the 0.10 boundary in a non-starting year', () => {
+    // Confirms the <= 0.1 threshold applies correctly after year 0
+    const data: SimulationDataPoint[] = [
+      createMilestoneDataPoint(30, 'accumulation', 500000),
+      createMilestoneDataPoint(31, 'retirement', 0.1), // Exactly 0.1 — bankrupt
+    ];
+
+    const milestones = SimulationDataExtractor.getMilestonesData(data, 30);
+
+    expect(milestones.bankruptcyAge).toBe(31);
+    expect(milestones.yearsToBankruptcy).toBe(1);
+  });
 });
 
 /**
@@ -449,8 +512,7 @@ const createTaxDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: options.earlyWithdrawalPenalties ?? 0,
     },
     totalTaxesDue: 0,
@@ -635,8 +697,7 @@ const createCashFlowDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: options.totalTaxesAndPenalties,
@@ -988,8 +1049,7 @@ const createNetCashFlowDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: options.totalTaxes ?? 0,
@@ -1510,6 +1570,86 @@ describe('SimulationDataExtractor.getPercentInPhaseForYear', () => {
     expect(data.numberRetirement).toBe(0);
     expect(data.numberBankrupt).toBe(0);
   });
+
+  it('does not count $0 portfolio as bankrupt in year 0 (starting year)', () => {
+    // Simulations starting with $0 — common for plans where accounts start empty.
+    // createMultiSimForPhaseTest always places year-0 data points with value=500000;
+    // we need a custom multi-sim that has $0 at year 0.
+    const makeZeroStartSim = (index: number): [number, SimulationResult] => {
+      const data: SimulationDataPoint[] = [
+        createMilestoneDataPoint(30, 'accumulation', 0), // Year 0: $0 starting balance
+        createMilestoneDataPoint(31, 'accumulation', 10000), // Year 1: growing
+      ];
+      return [
+        index,
+        {
+          data,
+          context: {
+            startAge: 30,
+            endAge: 31,
+            yearsToSimulate: 1,
+            startDate: '2024-01-01',
+            endDate: '2025-01-01',
+            retirementStrategy: { type: 'fixedAge' as const, retirementAge: 65 },
+            rmdAge: 73,
+          },
+        },
+      ];
+    };
+
+    const multiSim: MultiSimulationResult = {
+      simulations: [makeZeroStartSim(0), makeZeroStartSim(1), makeZeroStartSim(2)],
+    };
+
+    const result = SimulationDataExtractor.getPercentInPhaseForYear(multiSim, 0);
+
+    expect(result.numberBankrupt).toBe(0);
+    expect(result.numberAccumulation).toBe(3);
+    expect(result.percentBankrupt).toBe(0);
+  });
+
+  it('counts $0 portfolio as bankrupt in year 1 but not year 0', () => {
+    // Verifies the year > 0 guard applies only at the starting year
+    const makeSim = (index: number, year1Value: number): [number, SimulationResult] => {
+      const data: SimulationDataPoint[] = [
+        createMilestoneDataPoint(30, 'accumulation', 0), // Year 0: $0 starting balance
+        createMilestoneDataPoint(31, 'accumulation', year1Value), // Year 1
+      ];
+      return [
+        index,
+        {
+          data,
+          context: {
+            startAge: 30,
+            endAge: 31,
+            yearsToSimulate: 1,
+            startDate: '2024-01-01',
+            endDate: '2025-01-01',
+            retirementStrategy: { type: 'fixedAge' as const, retirementAge: 65 },
+            rmdAge: 73,
+          },
+        },
+      ];
+    };
+
+    const multiSim: MultiSimulationResult = {
+      simulations: [
+        makeSim(0, 0), // $0 at year 1 — bankrupt
+        makeSim(1, 50000), // Normal at year 1 — accumulation
+      ],
+    };
+
+    const year0Result = SimulationDataExtractor.getPercentInPhaseForYear(multiSim, 0);
+    const year1Result = SimulationDataExtractor.getPercentInPhaseForYear(multiSim, 1);
+
+    // Year 0: neither sim is bankrupt even though both start at $0
+    expect(year0Result.numberBankrupt).toBe(0);
+    expect(year0Result.numberAccumulation).toBe(2);
+
+    // Year 1: one sim goes bankrupt, one does not
+    expect(year1Result.numberBankrupt).toBe(1);
+    expect(year1Result.numberAccumulation).toBe(1);
+  });
 });
 
 /**
@@ -1647,8 +1787,7 @@ const createCashFlowInvariantDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: options.totalTaxes ?? 0,

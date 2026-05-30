@@ -81,36 +81,34 @@ describe('incomeFormSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should reject wage income without withholding', () => {
+  it('should accept wage income without withholding (withholding is optional)', () => {
     const result = incomeFormSchema.safeParse({
       ...validIncome,
       taxes: { incomeType: 'wage' },
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
-  it('should reject socialSecurity with invalid withholding rate', () => {
+  it('should accept any withholding rate (country-specific validation is not enforced at schema level)', () => {
     const result = incomeFormSchema.safeParse({
       ...validIncome,
       taxes: { incomeType: 'socialSecurity', withholding: 15 },
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
-  it('should reject selfEmployment (not yet supported)', () => {
-    const result = incomeFormSchema.safeParse({
+  it('should accept any incomeType string (country enum validation not at schema level)', () => {
+    const result1 = incomeFormSchema.safeParse({
       ...validIncome,
       taxes: { incomeType: 'selfEmployment' },
     });
-    expect(result.success).toBe(false);
-  });
+    expect(result1.success).toBe(true);
 
-  it('should reject pension (not yet supported)', () => {
-    const result = incomeFormSchema.safeParse({
+    const result2 = incomeFormSchema.safeParse({
       ...validIncome,
       taxes: { incomeType: 'pension' },
     });
-    expect(result.success).toBe(false);
+    expect(result2.success).toBe(true);
   });
 
   it('should reject positive growth rate with growthLimit <= amount', () => {

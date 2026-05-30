@@ -29,6 +29,7 @@ describe('Returns vs Yields - Balance Update Behavior', () => {
       name: 'Emergency Fund',
       type: 'savings',
       balance: 10000,
+      owner: 'primary',
     };
 
     beforeEach(() => {
@@ -93,6 +94,7 @@ describe('Returns vs Yields - Balance Update Behavior', () => {
       type: '401k',
       balance: 100000,
       percentBonds: 40, // 40% bonds, 60% stocks
+      owner: 'primary',
     };
 
     beforeEach(() => {
@@ -175,6 +177,7 @@ describe('Returns vs Yields - Balance Update Behavior', () => {
       balance: 50000,
       percentBonds: 20,
       costBasis: 40000, // $10k in gains
+      owner: 'primary',
     };
 
     beforeEach(() => {
@@ -238,6 +241,7 @@ describe('Returns vs Yields - Balance Update Behavior', () => {
       balance: 30000,
       percentBonds: 30,
       contributionBasis: 25000,
+      owner: 'primary',
     };
 
     beforeEach(() => {
@@ -331,6 +335,7 @@ describe('Returns and Yields Integration', () => {
       type: '401k',
       balance: 100000,
       percentBonds: 50,
+      owner: 'primary',
     });
 
     const returns: AssetReturnRates = { stocks: 0.01, bonds: 0.005, cash: 0 };
@@ -353,6 +358,7 @@ describe('Returns and Yields Integration', () => {
       type: '401k',
       balance: 100000,
       percentBonds: 50,
+      owner: 'primary',
     });
 
     const returns: AssetReturnRates = { stocks: 0.01, bonds: 0.005, cash: 0 };
@@ -385,6 +391,7 @@ describe('Yield Tax Categories', () => {
       balance: 10000,
       percentBonds: 0,
       costBasis: 10000,
+      owner: 'primary',
     });
 
     const taxDeferredAccount = new TaxDeferredAccount({
@@ -393,6 +400,7 @@ describe('Yield Tax Categories', () => {
       type: '401k',
       balance: 10000,
       percentBonds: 0,
+      owner: 'primary',
     });
 
     const taxFreeAccount = new TaxFreeAccount({
@@ -402,6 +410,7 @@ describe('Yield Tax Categories', () => {
       balance: 10000,
       percentBonds: 0,
       contributionBasis: 10000,
+      owner: 'primary',
     });
 
     const savingsAccount = new SavingsAccount({
@@ -409,6 +418,7 @@ describe('Yield Tax Categories', () => {
       name: 'Savings',
       type: 'savings',
       balance: 10000,
+      owner: 'primary',
     });
 
     // Tax categories determine how yields are taxed
@@ -433,6 +443,7 @@ describe('Zero and Negative Returns', () => {
       type: '401k',
       balance: 100000,
       percentBonds: 50,
+      owner: 'primary',
     });
 
     const returns: AssetReturnRates = { stocks: 0, bonds: 0, cash: 0 };
@@ -448,6 +459,7 @@ describe('Zero and Negative Returns', () => {
       type: '401k',
       balance: 100000,
       percentBonds: 50,
+      owner: 'primary',
     });
 
     const returns: AssetReturnRates = {
@@ -470,6 +482,7 @@ describe('Zero and Negative Returns', () => {
       type: '401k',
       balance: 100000,
       percentBonds: 50,
+      owner: 'primary',
     });
 
     const returns: AssetReturnRates = { stocks: -0.05, bonds: -0.01, cash: 0 };

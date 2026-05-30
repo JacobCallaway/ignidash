@@ -291,9 +291,9 @@ describe('upsertExpense', () => {
     });
   });
 
-  it('throws at max 10 expenses on insert', async () => {
+  it('throws at max 20 expenses on insert', async () => {
     const t = convexTest(schema, modules);
-    const expenses = Array.from({ length: 10 }, (_, i) => ({
+    const expenses = Array.from({ length: 20 }, (_, i) => ({
       id: `exp-${i}`,
       name: `Expense ${i}`,
       amount: 10000,
@@ -309,9 +309,9 @@ describe('upsertExpense', () => {
     await expect(asUser.mutation(api.expense.upsertExpense, { planId, expense: newExpense })).rejects.toThrow();
   });
 
-  it('allows update when at max 10', async () => {
+  it('allows update when at max 20', async () => {
     const t = convexTest(schema, modules);
-    const expenses = Array.from({ length: 10 }, (_, i) => ({
+    const expenses = Array.from({ length: 20 }, (_, i) => ({
       id: `exp-${i}`,
       name: `Expense ${i}`,
       amount: 10000,
@@ -331,7 +331,7 @@ describe('upsertExpense', () => {
 
     await t.run(async (ctx) => {
       const plan = await ctx.db.get(planId);
-      expect(plan!.expenses).toHaveLength(10);
+      expect(plan!.expenses).toHaveLength(20);
       expect(plan!.expenses.find((e) => e.id === 'exp-0')!.name).toBe('Updated');
     });
   });

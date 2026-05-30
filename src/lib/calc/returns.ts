@@ -24,6 +24,7 @@ export interface AccountDataWithReturns {
   name: string;
   id: string;
   type: AccountInputs['type'];
+  taxCategory: TaxCategory;
   returnAmounts: AssetReturnAmounts;
   cumulativeReturnAmounts: AssetReturnAmounts;
 }

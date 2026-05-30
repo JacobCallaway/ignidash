@@ -21,7 +21,8 @@ export const debtValidator = v.object({
   interestType: v.union(v.literal('simple'), v.literal('compound')),
   compoundingFrequency: v.optional(v.union(v.literal('daily'), v.literal('monthly'))),
   startDate: debtTimePointValidator,
-  monthlyPayment: v.number(),
+  paymentType: v.optional(v.union(v.literal('fixed'), v.literal('minimumPayment'))),
+  monthlyPayment: v.optional(v.number()),
   disabled: v.optional(v.boolean()),
   syncedFinanceId: v.optional(v.string()),
 });

@@ -103,8 +103,7 @@ const createDataPoint = (options: {
       provisionalIncome: 0,
     },
     earlyWithdrawalPenalties: {
-      taxDeferredPenaltyAmount: 0,
-      taxFreePenaltyAmount: 0,
+      perGroupAmount: {},
       totalPenaltyAmount: 0,
     },
     totalTaxesDue: (options.federalIncomeTax ?? 10000) + (options.ficaTax ?? 7650),

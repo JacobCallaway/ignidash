@@ -21,6 +21,9 @@ export const retirementStrategySchema = z.discriminatedUnion('type', [
     safeWithdrawalRate: percentageField(2, 6, 'Safe withdrawal rate'),
     type: z.literal('swrTarget'),
   }),
+  z.object({
+    type: z.literal('earliestPossible'),
+  }),
 ]);
 
 export const timelineFormSchema = z
@@ -32,6 +35,12 @@ export const timelineFormSchema = z
       max: 'Life expectancy must be at most 110 years',
     }),
     retirementStrategy: retirementStrategySchema,
+    spouseBirthMonth: z.number().int().min(1).max(12).optional(),
+    spouseBirthYear: z.number().int().min(1925).max(2025).optional(),
+    spouseLifeExpectancy: ageField(50, 110, {
+      min: 'Spouse life expectancy must be at least 50 years',
+      max: 'Spouse life expectancy must be at most 110 years',
+    }).optional(),
   })
   .refine(
     (data) => {
@@ -62,6 +71,17 @@ export const timelineFormSchema = z
     {
       message: 'Retirement age must be between current age and life expectancy',
       path: ['retirementStrategy', 'retirementAge'],
+    }
+  )
+  .refine(
+    (data) => {
+      const hasMonth = data.spouseBirthMonth !== undefined;
+      const hasYear = data.spouseBirthYear !== undefined;
+      return hasMonth === hasYear;
+    },
+    {
+      message: 'Both spouse birth month and year are required',
+      path: ['spouseBirthYear'],
     }
   );
 

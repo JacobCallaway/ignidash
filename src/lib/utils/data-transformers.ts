@@ -36,38 +36,32 @@ import type { SimulationResult } from '@/lib/calc/simulation-engine';
 // CONVEX → ZOD
 // ============================================================================
 
-// percentBonds is optional in Convex (not applicable to savings), but guaranteed by the
-// Zod discriminated union for investment account types — hence the non-null assertions.
 export function accountFromConvex(account: Doc<'plans'>['accounts'][number]): AccountInputs {
-  const base = { id: account.id, name: account.name, balance: account.balance, syncedFinanceId: account.syncedFinanceId };
-
-  switch (account.type) {
-    case 'savings':
-      return { ...base, type: 'savings' };
-    case 'taxableBrokerage':
-      return { ...base, type: 'taxableBrokerage', percentBonds: account.percentBonds!, costBasis: account.costBasis };
-    case 'roth401k':
-    case 'roth403b':
-    case 'rothIra':
-      return { ...base, type: account.type, percentBonds: account.percentBonds!, contributionBasis: account.contributionBasis };
-    case '401k':
-    case '403b':
-    case 'ira':
-    case 'hsa':
-      return { ...base, type: account.type, percentBonds: account.percentBonds! };
-  }
+  return {
+    id: account.id,
+    name: account.name,
+    balance: account.balance,
+    type: account.type,
+    owner: account.owner ?? 'primary',
+    syncedFinanceId: account.syncedFinanceId,
+    percentBonds: account.percentBonds,
+    costBasis: account.costBasis,
+    contributionBasis: account.contributionBasis,
+  };
 }
 
 // Flattens nested amount union ({ type, dollarAmount }) into top-level fields (contributionType, dollarAmount).
 export function contributionFromConvex(contribution: Doc<'plans'>['contributionRules'][number]): ContributionInputs {
   const base = {
     id: contribution.id,
-    accountId: contribution.accountId,
+    accountId: contribution.accountId ?? '',
+    debtId: contribution.debtId,
     rank: contribution.rank,
     maxBalance: contribution.maxBalance,
     incomeId: contribution.incomeId,
     disabled: contribution.disabled ?? false,
     employerMatch: contribution.employerMatch,
+    employerMatchPercent: contribution.employerMatchPercent,
     enableMegaBackdoorRoth: contribution.enableMegaBackdoorRoth,
   };
 
@@ -76,6 +70,8 @@ export function contributionFromConvex(contribution: Doc<'plans'>['contributionR
       return { ...base, contributionType: 'dollarAmount', dollarAmount: contribution.amount.dollarAmount };
     case 'percentRemaining':
       return { ...base, contributionType: 'percentRemaining', percentRemaining: contribution.amount.percentRemaining };
+    case 'percentOfIncome':
+      return { ...base, contributionType: 'percentOfIncome', percentOfIncome: contribution.amount.percentOfIncome };
     case 'unlimited':
       return { ...base, contributionType: 'unlimited' };
   }
@@ -118,6 +114,7 @@ export function debtFromConvex(debt: NonNullable<Doc<'plans'>['debts']>[number])
     interestType: debt.interestType,
     compoundingFrequency: debt.compoundingFrequency,
     startDate: { ...debt.startDate },
+    paymentType: debt.paymentType ?? 'fixed',
     monthlyPayment: debt.monthlyPayment,
     disabled: debt.disabled ?? false,
     syncedFinanceId: debt.syncedFinanceId,
@@ -146,10 +143,11 @@ export function incomeFromConvex(income: Doc<'plans'>['incomes'][number]): Incom
     id: income.id,
     name: income.name,
     amount: income.amount,
+    owner: income.owner ?? 'primary',
     frequency: income.frequency,
     timeframe: { start: income.timeframe.start, end: income.timeframe.end },
     growth: income.growth,
-    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding },
+    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding, autoWithholding: income.taxes.autoWithholding },
     disabled: income.disabled ?? false,
   };
 }
@@ -181,6 +179,7 @@ export function simulatorFromConvex(plan: Doc<'plans'>): SimulatorInputs {
   const contributionRules = Object.fromEntries(plan.contributionRules.map((rule) => [rule.id, contributionFromConvex(rule)]));
 
   return {
+    country: plan.country ?? 'US',
     timeline: timelineFromConvex(plan.timeline),
     incomes,
     accounts,
@@ -214,35 +213,31 @@ export function glidePathFromConvex(glidePath: Doc<'plans'>['glidePath']): Glide
 // ============================================================================
 
 export function accountToConvex(account: AccountInputs): Doc<'plans'>['accounts'][number] {
-  const base = { id: account.id, name: account.name, balance: account.balance, syncedFinanceId: account.syncedFinanceId };
-
-  switch (account.type) {
-    case 'savings':
-      return { ...base, type: 'savings' };
-    case 'taxableBrokerage':
-      return { ...base, type: 'taxableBrokerage', percentBonds: account.percentBonds, costBasis: account.costBasis };
-    case 'roth401k':
-    case 'roth403b':
-    case 'rothIra':
-      return { ...base, type: account.type, percentBonds: account.percentBonds, contributionBasis: account.contributionBasis };
-    case '401k':
-    case '403b':
-    case 'ira':
-    case 'hsa':
-      return { ...base, type: account.type, percentBonds: account.percentBonds };
-  }
+  return {
+    id: account.id,
+    name: account.name,
+    balance: account.balance,
+    type: account.type,
+    owner: account.owner,
+    syncedFinanceId: account.syncedFinanceId,
+    percentBonds: account.percentBonds,
+    costBasis: account.costBasis,
+    contributionBasis: account.contributionBasis,
+  };
 }
 
 // Re-nests flat contributionType/dollarAmount back into the amount union.
 export function contributionToConvex(contribution: ContributionInputs): Doc<'plans'>['contributionRules'][number] {
   const base = {
     id: contribution.id,
-    accountId: contribution.accountId,
+    accountId: contribution.accountId !== '' ? contribution.accountId : undefined,
+    debtId: contribution.debtId,
     rank: contribution.rank,
     disabled: contribution.disabled ?? false,
     maxBalance: contribution.maxBalance,
     incomeId: contribution.incomeId,
     employerMatch: contribution.employerMatch,
+    employerMatchPercent: contribution.employerMatchPercent,
     enableMegaBackdoorRoth: contribution.enableMegaBackdoorRoth,
   };
 
@@ -251,6 +246,8 @@ export function contributionToConvex(contribution: ContributionInputs): Doc<'pla
       return { ...base, amount: { type: 'dollarAmount', dollarAmount: contribution.dollarAmount } };
     case 'percentRemaining':
       return { ...base, amount: { type: 'percentRemaining', percentRemaining: contribution.percentRemaining } };
+    case 'percentOfIncome':
+      return { ...base, amount: { type: 'percentOfIncome', percentOfIncome: contribution.percentOfIncome } };
     case 'unlimited':
       return { ...base, amount: { type: 'unlimited' } };
   }
@@ -293,6 +290,7 @@ export function debtToConvex(debt: DebtInputs): NonNullable<Doc<'plans'>['debts'
     interestType: debt.interestType,
     compoundingFrequency: debt.compoundingFrequency,
     startDate: { ...debt.startDate },
+    paymentType: debt.paymentType,
     monthlyPayment: debt.monthlyPayment,
     disabled: debt.disabled ?? false,
     syncedFinanceId: debt.syncedFinanceId,
@@ -320,10 +318,11 @@ export function incomeToConvex(income: IncomeInputs): Doc<'plans'>['incomes'][nu
     id: income.id,
     name: income.name,
     amount: income.amount,
+    owner: income.owner,
     frequency: income.frequency,
     timeframe: { start: income.timeframe.start, end: income.timeframe.end },
     growth: income.growth,
-    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding },
+    taxes: { incomeType: income.taxes.incomeType, withholding: income.taxes.withholding, autoWithholding: income.taxes.autoWithholding },
     disabled: income.disabled ?? false,
   };
 }

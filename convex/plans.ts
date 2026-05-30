@@ -5,7 +5,7 @@ import type { Doc } from './_generated/dataModel';
 import { getUserIdOrThrow } from './utils/auth_utils';
 import { deleteAllConversationsForPlan } from './utils/conversation_utils';
 import { deleteAllInsightsForPlan } from './utils/insights_utils';
-import { deleteAllSnapshotsForPlan } from './utils/snapshot_utils';
+import { deleteAllSnapshotsForPlan, patchPlanWithSnapshot } from './utils/snapshot_utils';
 import { getPlanForCurrentUserOrThrow, getAllPlansForUser } from './utils/plan_utils';
 import { removeDanglingSyncIds } from './utils/plan_export_utils';
 import { timelineValidator } from './validators/timeline_validator';
@@ -130,8 +130,8 @@ export const internalGetOrCreateDefaultPlan = internalMutation({
 });
 
 export const createBlankPlan = mutation({
-  args: { newPlanName: v.string() },
-  handler: async (ctx, { newPlanName }) => {
+  args: { newPlanName: v.string(), country: v.optional(v.string()), filingStatus: v.optional(v.string()) },
+  handler: async (ctx, { newPlanName, country, filingStatus }) => {
     const { userId } = await getUserIdOrThrow(ctx);
 
     const plans = await getAllPlansForUser(ctx, userId);
@@ -141,6 +141,7 @@ export const createBlankPlan = mutation({
       userId,
       name: newPlanName,
       isDefault: false,
+      country,
       timeline: null,
       incomes: [],
       expenses: [],
@@ -150,7 +151,7 @@ export const createBlankPlan = mutation({
       contributionRules: [],
       baseContributionRule: { type: 'save' },
       marketAssumptions: { stockReturn: 10, stockYield: 3.5, bondReturn: 5, bondYield: 4.5, cashReturn: 3, inflationRate: 3 },
-      taxSettings: { filingStatus: 'single' },
+      taxSettings: { filingStatus: filingStatus ?? 'single' },
       privacySettings: { isPrivate: true },
       simulationSettings: { simulationSeed: 9521, simulationMode: 'fixedReturns' },
     });
@@ -264,6 +265,15 @@ export const updatePlanName = mutation({
     await getPlanForCurrentUserOrThrow(ctx, planId);
 
     await ctx.db.patch(planId, { name });
+  },
+});
+
+export const updateCountry = mutation({
+  args: { planId: v.id('plans'), country: v.string(), filingStatus: v.string() },
+  handler: async (ctx, { planId, country, filingStatus }) => {
+    await getPlanForCurrentUserOrThrow(ctx, planId);
+
+    await patchPlanWithSnapshot(ctx, planId, { country, taxSettings: { filingStatus } });
   },
 });
 
