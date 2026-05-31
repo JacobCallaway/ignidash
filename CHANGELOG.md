@@ -96,6 +96,7 @@ The largest change on this branch — a full country abstraction layer that make
 ## UI Improvements
 
 - **Simulation settings moved to middle column** — settings previously in the results column header are now in the numbers column header for better layout balance
+- **Monte Carlo summary cards now show hover info** — every summary metric includes a tooltip and the success rate card can be clicked to filter failed simulation scenarios
 - **Better localization** — currency and number formatting consolidated; `formatCurrencyPlaceholder`, `formatCompactCurrency`, and `frequencyForDisplay` helpers refined; locale-aware month/year formatting in time-point labels
 
 ---
