@@ -15,6 +15,7 @@ import MetricsCard from './metrics-card';
 interface SimulationMetricsProps {
   keyMetrics: KeyMetrics;
   simulationResult?: SimulationResult;
+  onClickSuccessMetric?: () => void;
 }
 
 const getSuccessColor = (success: number): string => {
@@ -29,7 +30,7 @@ const getSuccessColor = (success: number): string => {
   return 'bg-red-100 text-red-800 inset-ring inset-ring-red-700/75 dark:bg-red-300/10 dark:text-red-200 dark:inset-ring-red-400/75';
 };
 
-export default function SimulationMetrics({ keyMetrics, simulationResult }: SimulationMetricsProps) {
+export default function SimulationMetrics({ keyMetrics, simulationResult, onClickSuccessMetric }: SimulationMetricsProps) {
   const updateCachedKeyMetrics = useUpdateCachedKeyMetrics();
   const updateCachedSimulationResult = useUpdateCachedSimulationResult();
 

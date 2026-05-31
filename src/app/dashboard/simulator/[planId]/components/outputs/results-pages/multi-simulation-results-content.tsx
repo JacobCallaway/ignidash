@@ -44,6 +44,8 @@ export default function MultiSimulationResultsContent({
   onAgeSelect,
   selectedAge,
   handleSeedFromTableChange,
+  showFailedScenariosOnly,
+  onClearFailedScenarios,
 }: MultiSimulationResultsContentProps) {
   const availableCategories =
     simulation !== null
@@ -86,8 +88,8 @@ export default function MultiSimulationResultsContent({
         yearlyTableData={yearlyTableData}
         activeSeed={activeSeed}
         handleSeedFromTableChange={handleSeedFromTableChange}
-        showFailedScenariosOnly={showFailedScenariosOnly}
-        onClearFailedScenarios={onClearFailedScenarios}
+        showFailedScenariosOnly={showFailedScenariosOnly ?? false}
+        onClearFailedScenarios={onClearFailedScenarios ?? (() => {})}
       />
     </>
   );
