@@ -88,6 +88,8 @@ export default function SimulationMetrics({ keyMetrics, simulationResult }: Simu
         stat={successForDisplay}
         className="col-span-2 2xl:col-span-1"
         statClassName={cn('px-1', successColor)}
+        statContext="Hover for details"
+        infoTooltip="Shows the share of Monte Carlo runs that reached retirement, ended with a positive balance, and had no portfolio shortfall. Click to show only failed scenarios."
         statWidget={<PartyPopperIcon className="text-primary h-10 w-10" />}
         onClick={onClickSuccessMetric}
         ariaLabel="Filter table to failed Monte Carlo scenarios"
@@ -96,33 +98,45 @@ export default function SimulationMetrics({ keyMetrics, simulationResult }: Simu
         name={metricName('Progress to Retirement')}
         stat={progressToRetirementForDisplay}
         className="col-span-2"
+        statContext="Hover for details"
+        infoTooltip="The portfolio progress toward retirement is shown as a percentage of portfolio value at retirement, capped at 100%."
         statWidget={progressWidget}
       />
       <MetricsCard
         name={metricName('Retirement Age')}
         stat={retirementAgeForDisplay}
+        statContext="Hover for details"
+        infoTooltip="The age at which the simulation enters the retirement phase."
         statWidget={<UmbrellaIcon className="text-primary h-10 w-10" />}
       />
       <MetricsCard
         name={metricName('Bankruptcy Age')}
         stat={bankruptcyAgeForDisplay}
+        statContext="Hover for details"
+        infoTooltip="If the portfolio runs out, this is the first age where a shortfall occurs."
         statWidget={<TriangleAlertIcon className="text-primary h-10 w-10" />}
       />
       <MetricsCard
         name={metricName('Lifetime Taxes')}
         stat={lifetimeTaxesAndPenaltiesForDisplay}
         className="hidden 2xl:block"
+        statContext="Hover for details"
+        infoTooltip="Total lifetime federal income, FICA, capital gains, NIIT, and early withdrawal penalties estimated in this simulation."
         statWidget={<BanknoteXIcon className="text-primary h-10 w-10" />}
       />
       <MetricsCard
         name={metricName('Retirement Portfolio')}
         stat={portfolioAtRetirementForDisplay}
         className="2xl:col-span-2"
+        statContext="Hover for details"
+        infoTooltip="The portfolio value when retirement begins in the simulation."
         statWidget={<LandmarkIcon className="text-primary h-10 w-10" />}
       />
       <MetricsCard
         name={metricName('Final Portfolio')}
         stat={finalPortfolioForDisplay}
+        statContext="Hover for details"
+        infoTooltip="Portfolio value at the end of the simulation horizon."
         statWidget={<SunsetIcon className="text-primary h-10 w-10" />}
       />
     </div>
