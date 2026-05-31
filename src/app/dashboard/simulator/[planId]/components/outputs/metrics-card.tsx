@@ -8,11 +8,22 @@ interface MetricsCardProps {
   statWidget?: React.ReactNode;
   className?: string;
   statClassName?: string;
+  onClick?: () => void;
+  ariaLabel?: string;
 }
 
-export default function MetricsCard({ name, stat, statContext, statWidget, className, statClassName }: MetricsCardProps) {
-  return (
-    <Card className={cn('my-0 text-center sm:text-left', className)}>
+export default function MetricsCard({
+  name,
+  stat,
+  statContext,
+  statWidget,
+  className,
+  statClassName,
+  onClick,
+  ariaLabel,
+}: MetricsCardProps) {
+  const card = (
+    <Card className={cn('my-0 text-center sm:text-left', className, onClick && 'cursor-pointer')}>
       <div className="sm:flex sm:items-center sm:justify-between">
         <div className="flex-1">
           <span className="text-muted-foreground block truncate text-sm font-medium">{name}</span>
@@ -26,5 +37,13 @@ export default function MetricsCard({ name, stat, statContext, statWidget, class
         </div>
       </div>
     </Card>
+  );
+
+  if (!onClick) return card;
+
+  return (
+    <button type="button" onClick={onClick} aria-label={ariaLabel ?? name} className="w-full text-left">
+      {card}
+    </button>
   );
 }

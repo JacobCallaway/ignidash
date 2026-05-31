@@ -89,6 +89,8 @@ export default function SimulationMetrics({ keyMetrics, simulationResult }: Simu
         className="col-span-2 2xl:col-span-1"
         statClassName={cn('px-1', successColor)}
         statWidget={<PartyPopperIcon className="text-primary h-10 w-10" />}
+        onClick={onClickSuccessMetric}
+        ariaLabel="Filter table to failed Monte Carlo scenarios"
       />
       <MetricsCard
         name={metricName('Progress to Retirement')}

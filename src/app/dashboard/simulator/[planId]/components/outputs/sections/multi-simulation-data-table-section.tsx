@@ -28,6 +28,8 @@ interface MultiSimulationDataTableSectionProps {
   yearlyTableData: YearlyAggregateTableRow[];
   activeSeed: number | undefined;
   handleSeedFromTableChange: (seed: number | null) => void;
+  showFailedScenariosOnly: boolean;
+  onClearFailedScenarios: () => void;
 }
 
 function MultiSimulationDataTableSection({
@@ -36,8 +38,13 @@ function MultiSimulationDataTableSection({
   yearlyTableData,
   activeSeed,
   handleSeedFromTableChange,
+  showFailedScenariosOnly = false,
+  onClearFailedScenarios = () => {},
 }: MultiSimulationDataTableSectionProps) {
   const [currentTableType, setCurrentTableType] = useState<TableType>(TableType.AllSimulations);
+
+  const filteredTableData = showFailedScenariosOnly ? tableData.filter((row) => !row.success) : tableData;
+  const failedCount = tableData.length - filteredTableData.length;
 
   let tableComponent;
   if (activeSeed && simulation) {
@@ -46,13 +53,29 @@ function MultiSimulationDataTableSection({
     switch (currentTableType) {
       case TableType.AllSimulations:
         tableComponent = (
-          <Table<MultiSimulationTableRow>
-            columns={multiSimColumns}
-            data={tableData}
-            keyField="seed"
-            onRowClick={(row: MultiSimulationTableRow) => handleSeedFromTableChange(row.seed)}
-            exportFilename="multi-simulation-data.csv"
-          />
+          <>
+            {showFailedScenariosOnly && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                <div>
+                  Showing <strong>{failedCount}</strong> failed simulation{failedCount === 1 ? '' : 's'} only.
+                </div>
+                <button
+                  type="button"
+                  onClick={onClearFailedScenarios}
+                  className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                >
+                  Show all scenarios
+                </button>
+              </div>
+            )}
+            <Table<MultiSimulationTableRow>
+              columns={multiSimColumns}
+              data={filteredTableData}
+              keyField="seed"
+              onRowClick={(row: MultiSimulationTableRow) => handleSeedFromTableChange(row.seed)}
+              exportFilename="multi-simulation-data.csv"
+            />
+          </>
         );
         break;
       case TableType.YearlyResults:

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 
 import type { SimulatorInputs } from '@/lib/schemas/inputs/simulator-schema';
 import {
@@ -91,6 +91,8 @@ export default function MultiSimulationResults({ inputs, simulationMode }: Multi
   const { analysis, tableData, yearlyTableData, chartData, keyMetrics, isLoadingOrValidating, completedSimulations } =
     useMultiSimulationResult(inputs, simulationMode);
 
+  const [showFailedScenariosOnly, setShowFailedScenariosOnly] = useState(false);
+
   const updateQuickSelectPercentile = useUpdateQuickSelectPercentile();
   const updateSelectedSeedFromTable = useUpdateSelectedSeedFromTable();
 
@@ -109,6 +111,14 @@ export default function MultiSimulationResults({ inputs, simulationMode }: Multi
     },
     [updateSelectedSeedFromTable]
   );
+
+  const handleShowFailedScenarios = useCallback(() => {
+    setShowFailedScenariosOnly(true);
+  }, []);
+
+  const handleClearFailedScenarios = useCallback(() => {
+    setShowFailedScenariosOnly(false);
+  }, []);
 
   const { activeSeed, activeSeedType } = useActiveSeed();
 
@@ -158,9 +168,15 @@ export default function MultiSimulationResults({ inputs, simulationMode }: Multi
   return (
     <>
       <SectionContainer showBottomBorder className="mb-0">
-        <SimulationMetrics keyMetrics={keyMetrics} />
+        <SimulationMetrics keyMetrics={keyMetrics} onClickSuccessMetric={handleShowFailedScenarios} />
       </SectionContainer>
-      <MultiSimulationResultsContent simulation={null} keyMetrics={keyMetrics} {...sharedProps} />
+      <MultiSimulationResultsContent
+        simulation={null}
+        keyMetrics={keyMetrics}
+        showFailedScenariosOnly={showFailedScenariosOnly}
+        onClearFailedScenarios={handleClearFailedScenarios}
+        {...sharedProps}
+      />
     </>
   );
 }

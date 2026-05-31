@@ -26,6 +26,8 @@ interface MultiSimulationResultsContentProps {
   onAgeSelect: (age: number) => void;
   selectedAge: number;
   handleSeedFromTableChange: (seed: number | null) => void;
+  showFailedScenariosOnly?: boolean;
+  onClearFailedScenarios?: () => void;
 }
 
 export default function MultiSimulationResultsContent({
@@ -84,6 +86,8 @@ export default function MultiSimulationResultsContent({
         yearlyTableData={yearlyTableData}
         activeSeed={activeSeed}
         handleSeedFromTableChange={handleSeedFromTableChange}
+        showFailedScenariosOnly={showFailedScenariosOnly}
+        onClearFailedScenarios={onClearFailedScenarios}
       />
     </>
   );
